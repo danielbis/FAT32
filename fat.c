@@ -3,7 +3,8 @@
 
 char fat_image[256];
 
-typedef struct {
+typedef struct 
+{
 	unsigned char jmp[3];
 	char oem[8];
 	unsigned short sector_size;
