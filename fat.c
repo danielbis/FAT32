@@ -27,9 +27,46 @@ typedef struct {
 	char fs_type[8];
 	char boot_code[436];
 	unsigned short boot_sector_signature;
-}_attribute((packed)) FAT32BootBlock;
+}__attribute((packed)) FAT32BootBlock;
+
+// GLOBAL booting sector variable
+FAT32BootBlock bpb;
+
+/* ************************************************************************************************
+	
+	Reads into the boot block and stores it inside the bpb global variable,
+	of type FAT32BootBlock. Per specification, FAT32BootBlock__attribue((packed)), 
+	takes care of endianness of the system. 
+
+	Uses global pathname to get the path to the file, could be passed in as an argument,
+	and pathname made local. I use full path.
+
+	fread just reads a block of memory of size struct, beacuse it is the same size 
+	and structure as the file image first block in 'falls' perfectly into correct attributes 
+	of the struct. 
 
 
+************************************************************************************************ */
+void info(){
+	FILE *ptr_img;
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.");
+		return;
+	}
+
+	fread(&bpb,sizeof(FAT32BootBlock),1,ptr_img);
+	fclose(ptr_img);
+	
+	printf("Bytes per sector: %d\n", bpb.sector_size);
+	printf("Sectors per cluster: %d\n", bpb.sectors_per_cluster);
+	printf("Reserved sectors: %d\n", bpb.reserved_sectors);
+	printf("Number of FAT tables: %d\n", bpb.number_of_fats);
+	printf("FAT size: %d\n", bpb.bpb_FATz32);
+	printf("Root cluster number: %d\n", bpb.bpb_rootcluster);
+
+}
 int main(int argc,char* argv[])
 {
     int counter;
@@ -42,5 +79,6 @@ int main(int argc,char* argv[])
     }
 
     printf("pathname is: %s\n", fat_image);
+    info();
     return 0;
 }
