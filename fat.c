@@ -3,7 +3,8 @@
 
 char fat_image[256];
 
-typedef struct {
+typedef struct 
+{
 	unsigned char jmp[3];
 	char oem[8];
 	unsigned short sector_size;
@@ -27,7 +28,7 @@ typedef struct {
 	char fs_type[8];
 	char boot_code[436];
 	unsigned short boot_sector_signature;
-}_attribute((packed)) FAT32BootBlock;
+}__attribute((packed)) FAT32BootBlock;
 
 
 int main(int argc,char* argv[])
