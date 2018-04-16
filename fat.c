@@ -6,6 +6,7 @@
 #include <inttypes.h>
 
 
+
 char fat_image[256];
 
 typedef struct 
@@ -110,7 +111,8 @@ void ls()
 	int number_of_fats = bpb.number_of_fats;
 	int FirstDataSector = bpb.reserved_sectors + (number_of_fats*bpb.bpb_FATz32);
 	// Let's assume we are in the root N=2
-	int N=2;
+	//int N=2;
+	int N=bpb.bpb_rootcluster;
 	//int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
 	int sectors_per_cluster = bpb.sectors_per_cluster;
 	int FirstSectorofCluster = ((N - 2)*sectors_per_cluster) + FirstDataSector;
@@ -123,9 +125,12 @@ void ls()
 		return;
 	}
 	DirectoryEntry de;
-
+	printf("FirstSectorofCluster %d\n",FirstSectorofCluster);	
+	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
 	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
 	fclose(ptr_img);
+
+	printf("The name is %s\n",de.Name);
 
 	//FirstSectorofCluster = FirstDataSector;
 /*
@@ -160,5 +165,6 @@ int main(int argc,char* argv[])
 
     printf("pathname is: %s\n", fat_image);
     info();
+    ls();
     return 0;
 }
