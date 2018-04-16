@@ -114,6 +114,19 @@ void ls()
 	//int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
 	int sectors_per_cluster = bpb.sectors_per_cluster;
 	int FirstSectorofCluster = ((N - 2)*sectors_per_cluster) + FirstDataSector;
+
+	FILE *ptr_img;
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.");
+		return;
+	}
+	DirectoryEntry de;
+
+	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
+	fclose(ptr_img);
+
 	//FirstSectorofCluster = FirstDataSector;
 /*
 •Make a directory structure like the 
