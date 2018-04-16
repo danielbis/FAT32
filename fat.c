@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <inttypes.h>
 
 
 char fat_image[256];
@@ -100,15 +103,17 @@ shells)Print an error if DIRNAME does not exist or is not a directory.
 //void ls(const char * directoryName)
 void ls()
 {
-	struct DIR_ENTRY dir;
+	//struct DIR_ENTRY dir;
 	//int useconds = atoi(argv[1]); 
 	//FirstSectorofCluster = ((N - 2)*BPB_SecPerClus) + FirstDataSector;
-	int number_of_fats = atoi(bpb.number_of_fats);
-	int FirstDataSector = bpb.reserved_sectors + (number_of_fats*bpb.bpb_FATz32)
+	//int number_of_fats = atoi(bpb.number_of_fats);
+	int number_of_fats = bpb.number_of_fats;
+	int FirstDataSector = bpb.reserved_sectors + (number_of_fats*bpb.bpb_FATz32);
 	// Let's assume we are in the root N=2
 	int N=2;
-	int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
-	FirstSectorofCluster = ((N - 2)*BPB_SecPerClus) + FirstDataSector;
+	//int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
+	int sectors_per_cluster = bpb.sectors_per_cluster;
+	int FirstSectorofCluster = ((N - 2)*sectors_per_cluster) + FirstDataSector;
 	//FirstSectorofCluster = FirstDataSector;
 /*
 •Make a directory structure like the 
