@@ -108,14 +108,14 @@ void ls()
 	//int useconds = atoi(argv[1]); 
 	//FirstSectorofCluster = ((N - 2)*BPB_SecPerClus) + FirstDataSector;
 	//int number_of_fats = atoi(bpb.number_of_fats);
-	int number_of_fats = bpb.number_of_fats;
-	int FirstDataSector = bpb.reserved_sectors + (number_of_fats*bpb.bpb_FATz32);
+	unsigned int number_of_fats = bpb.number_of_fats;
+	unsigned int FirstDataSector = bpb.reserved_sectors + (number_of_fats*bpb.bpb_FATz32);
 	// Let's assume we are in the root N=2
-	//int N=2;
-	int N=bpb.bpb_rootcluster;
+	unsigned int N=2;
+	//int N=bpb.bpb_rootcluster;
 	//int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
-	int sectors_per_cluster = bpb.sectors_per_cluster;
-	int FirstSectorofCluster = ((N - 2)*sectors_per_cluster) + FirstDataSector;
+	unsigned int sectors_per_cluster = bpb.sectors_per_cluster;
+	unsigned int FirstSectorofCluster = ((N - 2)*sectors_per_cluster) + FirstDataSector*512;
 
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
@@ -126,11 +126,17 @@ void ls()
 	}
 	DirectoryEntry de;
 	printf("FirstSectorofCluster %d\n",FirstSectorofCluster);	
+	//FirstSectorofCluster = 1049600;
 	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+
 	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
+
 	fclose(ptr_img);
 
 	printf("The name is %s\n",de.Name);
+	printf("Attr is %d\n",de.Attr);
+	printf("NTRes is %d\n",de.NTRes);
+	printf("CrtDate is %d\n",de.CrtDate);
 
 	//FirstSectorofCluster = FirstDataSector;
 /*
