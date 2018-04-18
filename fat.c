@@ -53,9 +53,83 @@ typedef struct
 		uint32_t FileSize;      /* byte 28 - 31; 32bit DWORD holding this file's size in bytes */
 }__attribute((packed)) DirectoryEntry;
 
+/* ************************************************************************************************
+ *
+ * 			HELPERS FUNCTIONS
+ *
+ ************************************************************************************************ */
+
+uint32_t root_dir_sector_count(FAT32BootBlock* bpb)
+{
+	return ((bpb->root_dir_entries * 32) + (bpb->sector_size - 1)) / bpb->sector_size;
+
+}
+/*
+  	FirstDataSector is the Sector where data region starts (should be something
+	around 100400 in hex)
+
+ */
+uint32_t first_data_sector(FAT32BootBlock* bpb)
+{
+	return bpb->reserved_sectors + (bpb->number_of_fats * bpb->bpb_FATz32)+ root_dir_sector_count(bpb);
+}
+
+/*
+  		Finds first data sector for given cluster number
+ */
+uint32_t first_sector_of_cluster(FAT32BootBlock* bpb, uint32_t cluster_num)
+{
+	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector(bpb))*512;
+}
+
+uint32_t cluster_to_byte_address(FAT32BootBlock* bpb, uint32_t cluster_num)
+{
+	uint32_t this_offset = cluster_num*4;
+	uint32_t this_sector_number = bpb->reserved_sectors + (this_offset/bpb->sector_size);
+	uint32_t this_ent_offset = this_offset % bpb->sector_size;
+
+	return this_sector_number * bpb->sector_size + this_ent_offset;
+}
+
+uint32_t look_up_fat(FAT32BootBlock* bpb, char* fat_image, uint32_t offset)
+{
+	FILE *ptr_img;
+	uint32_t fat_entry;
+	ptr_img = fopen(fat_image, "r");
+	fseek(ptr_img, offset, SEEK_SET);
+	fread(&fat_entry, sizeof(fat_entry),1, ptr_img);
+	fclose(ptr_img);
+	return (fat_entry);
+}
+
+void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image)
+{
+	int counter;
+	int i = 0;
+	DirectoryEntry dir_array[16];
+	FILE *ptr_img;
+	ptr_img = fopen(fat_image, "r");
+	fseek(ptr_img, DirectoryAddress, SEEK_SET);
+	// (sector_size)/sizeof(DirectoryEntry) = 512/32 = 16
+	for(counter = 0; counter < 16; counter ++){
+		fread(&dir_array[counter], sizeof(DirectoryEntry),1,ptr_img);
+		//fseek(ptr_img,1,SEEK_CUR);
+		if ((dir_array[counter].Attr & 0x0F) <= 0)
+			for (i =0; i<11; ++i){
+				printf("%c\t", dir_array[counter].Name[i]);
+			}
+		printf("%s\n",dir_array[counter].Name);
+	}
+	fclose(ptr_img);
+}
 
 
-// GLOBAL booting sector variable
+
+/* ************************************************************************************************
+ *
+ * 			FUNCTIONALITY
+ *
+ ************************************************************************************************ */
 
 /* ************************************************************************************************
 	
@@ -93,41 +167,6 @@ void info(FAT32BootBlock * bpb, char* fat_image)
 	printf("FAT size: %d\n", bpb->bpb_FATz32);
 	printf("Root cluster number: %d\n", bpb->bpb_rootcluster);
 
-}
-
-uint32_t root_dir_sector_count(FAT32BootBlock* bpb) {
-	return ((bpb->root_dir_entries * 32) + (bpb->sector_size - 1)) / bpb->sector_size;
-	
-}
-
-uint32_t first_data_sector(FAT32BootBlock* bpb){
-	return bpb->reserved_sectors + (bpb->number_of_fats * bpb->bpb_FATz32)+ root_dir_sector_count(bpb);
-}
-
-uint32_t first_sector_of_cluster(FAT32BootBlock* bpb, uint32_t cluster_num){
-	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector(bpb))*512;
-} 
-
-uint32_t cluster_to_byte_address(FAT32BootBlock* bpb, uint32_t cluster_num){
-	uint32_t this_offset = cluster_num*4;
-	uint32_t this_sector_number = bpb->reserved_sectors + (this_offset/bpb->sector_size);
-	uint32_t this_ent_offset = this_offset % bpb->sector_size;
-
-	return this_sector_number * bpb->sector_size + this_ent_offset;
-}
-void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image) {
-    int counter;
-    DirectoryEntry dir_array[16];
-    FILE *ptr_img;
-	ptr_img = fopen(fat_image, "r");
-    fseek(ptr_img, DirectoryAddress, SEEK_SET);
-    for(counter = 0; counter < 16; counter ++){
-        fread(&dir_array[counter], sizeof(DirectoryEntry),1,ptr_img);
-        //fseek(ptr_img,1,SEEK_CUR);
-        if ((dir_array[counter].Attr & 0x0F) <= 0)
-        	printf("%s\n",dir_array[counter].Name);
-    }
-    fclose(ptr_img);
 }
 
 
@@ -172,6 +211,14 @@ void ls(FAT32BootBlock* bpb, char* fat_image)
 	fclose(ptr_img);
 	populate_dir(bpb, FirstSectorofCluster, fat_image);
 	printf("The name is %s\n",de.Name);
+	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb, bpb->bpb_rootcluster));
+	printf("fat entry is %d\n", fat_entry);
+
+	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){
+		printf("END OF THE DIRECTORY. \n");
+	}else{
+		printf("Not the end of directory. \n");
+	}
 
 }
 //FirstSectorofCluster = FirstDataSector;
