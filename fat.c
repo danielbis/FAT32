@@ -169,7 +169,7 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 
 
 ************************************************************************************************ */
-void info(FAT32BootBlock * bpb, char* fat_image)
+void init_env(FAT32BootBlock * bpb, char* fat_image, uint32_t * current_cluster, char* pwd)
 {
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
@@ -181,15 +181,17 @@ void info(FAT32BootBlock * bpb, char* fat_image)
 
 	fread(bpb,sizeof(FAT32BootBlock),1,ptr_img);
 	fclose(ptr_img);
-	
-	
+	*current_cluster = bpb-> bpb_rootcluster;
+	strcpy(pwd, "/");
+}
+void info(FAT32BootBlock * bpb)
+{
 	printf("Bytes per sector: %d\n", bpb->sector_size);
 	printf("Sectors per cluster: %d\n", bpb->sectors_per_cluster);
 	printf("Reserved sectors: %d\n", bpb->reserved_sectors);
 	printf("Number of FAT tables: %d\n", bpb->number_of_fats);
 	printf("FAT size: %d\n", bpb->bpb_FATz32);
 	printf("Root cluster number: %d\n", bpb->bpb_rootcluster);
-
 }
 
 
@@ -200,7 +202,7 @@ shells)Print an error if DIRNAME does not exist or is not a directory.
 */
 //void ls(const char * directoryName)
 
-void ls(FAT32BootBlock* bpb, char* fat_image)
+void ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster)
 {
 	/*unsigned int root_dir_sectors = ((bpb.root_dir_entries * 32) + (bpb.sector_size -1)) / bpb.sector_size;
 	int FirstDataSector = bpb.reserved_sectors + (bpb.number_of_fats*bpb.bpb_FATz32) + root_dir_sectors;
@@ -211,7 +213,7 @@ void ls(FAT32BootBlock* bpb, char* fat_image)
 	int sectors_per_cluster = bpb.sectors_per_cluster;
 	int FirstSectorofCluster = (((N - 2)*sectors_per_cluster) + FirstDataSector)*512;
 	*/
-	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, bpb->bpb_rootcluster);
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
 	//uint32_t byte_address = cluster_to_byte_address(bpb, FirstSectorofCluster);
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
@@ -234,7 +236,7 @@ void ls(FAT32BootBlock* bpb, char* fat_image)
 	fclose(ptr_img);
 	populate_dir(bpb, FirstSectorofCluster, fat_image);
 	printf("The name is %s\n",de.Name);
-	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb, bpb->bpb_rootcluster));
+	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
 	printf("fat entry is %d\n", fat_entry);
 
 	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){
@@ -268,6 +270,8 @@ then current_cluster_number = FAT[current_cluster_number]. Do step 3 - 5 by rese
 int main(int argc,char* argv[])
 {
     char fat_image[256];
+    char pwd[256];
+    uint32_t current_cluster;
     FAT32BootBlock bpb;
 
     if(argc==1)
@@ -278,8 +282,9 @@ int main(int argc,char* argv[])
     }
 
     printf("pathname is: %s\n", fat_image);
-    info(&bpb, fat_image);
-    ls(&bpb, fat_image);
+	init_env(&bpb, fat_image, &current_cluster, pwd);
+    info(&bpb);
+    ls(&bpb, fat_image, current_cluster);
     //ls();
     return 0;
 }
