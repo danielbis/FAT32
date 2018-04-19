@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <inttypes.h>
-
-
+#include <ctype.h>
 
 
 typedef struct 
@@ -102,6 +101,29 @@ uint32_t look_up_fat(FAT32BootBlock* bpb, char* fat_image, uint32_t offset)
 	return (fat_entry);
 }
 
+void process_filenames(DirectoryEntry* dir_array, int length)
+{
+	int i = 0;
+	for (i=0; i < length; ++i)
+	{
+		if (dir_array[i].Attr == 0x10){
+			const char s[2] = " ";
+			char *token;
+			token = strtok(dir_array[i].Name, s);
+			strcpy(dir_array[i].Name, token);
+			printf("processed dir: %s\n", dir_array[i].Name);
+		}
+		else {
+			char *white_space = strstr(dir_array[i].Name," ");
+			if ((white_space) && isspace(*white_space) && isalpha(*(white_space+1))){
+				*white_space = '.';
+			}
+			printf("processed dir: %s\n", dir_array[i].Name);
+
+		}
+	}
+}
+
 void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image)
 {
 	int counter;
@@ -121,6 +143,7 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 		printf("%s\n",dir_array[counter].Name);
 	}
 	fclose(ptr_img);
+	process_filenames(dir_array, 16);
 }
 
 
