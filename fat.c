@@ -111,24 +111,26 @@ void process_filenames(DirectoryEntry* dir_array, int length)
 			char *token;
 			token = strtok(dir_array[i].Name, s);
 			strcpy(dir_array[i].Name, token);
-			printf("processed dir: %s\n", dir_array[i].Name);
 		}
 		else {
 			char *white_space = strstr(dir_array[i].Name," ");
 			if ((white_space) && isspace(*white_space) && isalpha(*(white_space+1))){
 				*white_space = '.';
 			}
-			printf("processed dir: %s\n", dir_array[i].Name);
-
+			white_space = strstr(dir_array[i].Name," ");
+			if ((white_space) && isspace(*white_space)){
+				*white_space = '\0';
+			}
 		}
+
 	}
 }
 
-void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image)
+void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image, DirectoryEntry* dir_array)
 {
 	int counter;
 	int i = 0;
-	DirectoryEntry dir_array[16];
+
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
 	fseek(ptr_img, DirectoryAddress, SEEK_SET);
@@ -136,11 +138,6 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 	for(counter = 0; counter < 16; counter ++){
 		fread(&dir_array[counter], sizeof(DirectoryEntry),1,ptr_img);
 		//fseek(ptr_img,1,SEEK_CUR);
-		if ((dir_array[counter].Attr & 0x0F) <= 0)
-			for (i =0; i<11; ++i){
-				printf("%c\t", dir_array[counter].Name[i]);
-			}
-		printf("%s\n",dir_array[counter].Name);
 	}
 	fclose(ptr_img);
 	process_filenames(dir_array, 16);
@@ -202,48 +199,76 @@ shells)Print an error if DIRNAME does not exist or is not a directory.
 */
 //void ls(const char * directoryName)
 
-void ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster)
+uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int cd, int size, char* dirname)
 {
-	/*unsigned int root_dir_sectors = ((bpb.root_dir_entries * 32) + (bpb.sector_size -1)) / bpb.sector_size;
-	int FirstDataSector = bpb.reserved_sectors + (bpb.number_of_fats*bpb.bpb_FATz32) + root_dir_sectors;
-	// Let's assume we are in the root N=2
-	//int N=2;
-	int N=bpb.bpb_rootcluster;
-	//int sectors_per_cluster = atoi(bpb.sectors_per_cluster);
-	int sectors_per_cluster = bpb.sectors_per_cluster;
-	int FirstSectorofCluster = (((N - 2)*sectors_per_cluster) + FirstDataSector)*512;
-	*/
+	DirectoryEntry dir_array[16];
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
 	//uint32_t byte_address = cluster_to_byte_address(bpb, FirstSectorofCluster);
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
-	//calculate the root directory location
-    //unsigned int RootDirClusterAddr = (bpb->number_of_fats * bpb->bpb_FATz32 * bpb->sector_size) + (bpb->reserved_sectors * bpb->sector_size);
 	if (!ptr_img)
 	{
 		printf("Unable to open the file image.");
-		return;
+		return 0;
 	}
 	DirectoryEntry de;
 	DirectoryEntry other;
 
 	//printf("RootDirClusterAddr %d\n",byte_address);	
 
-	printf("FirstSectorofCluster %d\n",FirstSectorofCluster);	
+	//printf("FirstSectorofCluster %d\n",FirstSectorofCluster);
 	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
 	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
 	
 	fclose(ptr_img);
-	populate_dir(bpb, FirstSectorofCluster, fat_image);
-	printf("The name is %s\n",de.Name);
+	populate_dir(bpb, FirstSectorofCluster, fat_image, dir_array);
 	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
-	printf("fat entry is %d\n", fat_entry);
+
+
+	if (cd == 1 && dirname){
+		int j;
+		for (j= 0; j < 16; ++j)
+		{
+			if (strcmp(dir_array[j].Name, "GREEN") == 0 && dir_array[j].Attr == 0x10){
+				return dir_array[j].FstClusLO;
+			}
+			else if (strcmp(dir_array[j].Name, "..") == 0 && dir_array[j].Attr == 0x10){
+				return dir_array[j].FstClusLO;
+			}
+		}
+
+	}
+	else if(size == 1 && dirname)
+	{
+		int j;
+		for (j= 0; j < 16; ++j)
+		{
+			if (strcmp(dir_array[j].Name, "A") == 0){
+				printf("%s\tsize:%d\n",dir_array[j].Name, dir_array[j].FileSize);
+			}
+
+		}
+	}
+	else{
+		int j;
+		for (j= 0; j < 16; ++j)
+		{
+			if ((dir_array[j].Attr & 0x0F) <= 0 && strlen(dir_array[j].Name) > 0)
+				printf("%s\tsize:%d\n",dir_array[j].Name, dir_array[j].FileSize);
+
+		}
+	}
+
 
 	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){
 		printf("END OF THE DIRECTORY. \n");
 	}else{
-		printf("Not the end of directory. \n");
+		return ls(bpb, fat_image, fat_entry, 0,0, NULL);
 	}
+
+
+	return current_cluster;
+
 
 }
 //FirstSectorofCluster = FirstDataSector;
@@ -284,7 +309,22 @@ int main(int argc,char* argv[])
     printf("pathname is: %s\n", fat_image);
 	init_env(&bpb, fat_image, &current_cluster, pwd);
     info(&bpb);
-    ls(&bpb, fat_image, current_cluster);
-    //ls();
+    ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
+    char* temp = "RED";
+    //size
+	printf("SIZE\n");
+
+	ls(&bpb, fat_image, current_cluster, 0, 1, temp);
+    // cd
+	printf("current cluster before cd: %d\n", current_cluster);
+	current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
+	printf("current cluster after cd: %d\n", current_cluster);
+	ls(&bpb, fat_image, current_cluster, 0,0, NULL);
+	printf("current cluster before cd: %d\n", current_cluster);
+	current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
+	printf("current cluster after cd: %d\n", current_cluster);
+	ls(&bpb, fat_image, current_cluster, 0,0, NULL);
+
+	//ls();
     return 0;
 }
