@@ -6,6 +6,8 @@
 #include <inttypes.h>
 #include <ctype.h>
 
+#define MAXCHAR 250
+#define CHARCOMAND 50
 
 typedef struct 
 {
@@ -301,29 +303,107 @@ int main(int argc,char* argv[])
 
     if(argc==1)
         printf("\nPlease, provide an image path name.\n");
+    	//printf("\nFor more info run the program with -h flag option\n");
     if(argc==2)
     {
         strcpy(fat_image,argv[1]);
     }
+    char cmd[MAXCHAR];
+    fgets(cmd, sizeof(cmd), stdin); 
+    printf("the line: %s\n", cmd);
+	//char comand[CHARCOMAND];
+	char* comand;
+	comand = strtok(cmd, " ");
+	printf("the comand: %s\n", comand);
+	if(strcmp(comand,"exit")==0)
+	{
+		printf("EXIT\n");
+		/*Part 1: exit*/
 
-    printf("pathname is: %s\n", fat_image);
-	init_env(&bpb, fat_image, &current_cluster, pwd);
-    info(&bpb);
-    ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
-    char* temp = "RED";
-    //size
-	printf("SIZE\n");
+	}else if((strcmp(comand,"info")==0))
+	{
+		printf("INFO\n");
+		/*Part 2: info*/
 
-	ls(&bpb, fat_image, current_cluster, 0, 1, temp);
-    // cd
-	printf("current cluster before cd: %d\n", current_cluster);
-	current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
-	printf("current cluster after cd: %d\n", current_cluster);
-	ls(&bpb, fat_image, current_cluster, 0,0, NULL);
-	printf("current cluster before cd: %d\n", current_cluster);
-	current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
-	printf("current cluster after cd: %d\n", current_cluster);
-	ls(&bpb, fat_image, current_cluster, 0,0, NULL);
+	}else if((strcmp(comand,"ls\n")==0))
+	{
+		printf("LS\n");
+		/*Part 3: ls DIRNAME*/
+		
+	}else if((strcmp(comand,"cd")==0))
+	{
+		printf("CD\n");
+		/*Part 4: cd DIRNAME*/
+		
+	}else if((strcmp(comand,"size")==0))
+	{
+		printf("SIZE\n");
+		/*Part 5: size FILENAME*/
+		
+	}else if((strcmp(comand,"creat")==0))
+	{
+		printf("CREAT\n");
+		/*Part 6: creat FILENAME*/
+		
+	}else if((strcmp(comand,"mkdir")==0))
+	{
+		printf("MKDIR\n");
+		/*Part 7: mkdir DIRNAME*/
+		
+	}else if((strcmp(comand,"rm")==0))
+	{
+		printf("RM\n");
+		/*Part 8: rm FILENAME*/
+		
+	}else if((strcmp(comand,"rmdir")==0))
+	{
+		printf("RMDIR\n");
+		/*Part 9: rmdir DIRNAME*/
+		
+	}else if((strcmp(comand,"open")==0))
+	{
+		printf("OPEN\n");
+		/*Part 10: open FILENAMEMODE*/
+		
+	}else if((strcmp(comand,"close")==0))
+	{
+		printf("CLOSE\n");
+		/*Part 11: close FILENAME*/
+		
+	}else if((strcmp(comand,"read")==0))
+	{
+		printf("READ\n");
+		/*Part 12: read FILENAMEOFFSETSIZE*/
+		
+	}else if((strcmp(comand,"write")==0))
+	{
+		printf("WRITE\n");
+		/*Part 13: write FILENAMEOFFSETSIZESTRING*/
+	}else
+	{
+		printf("UNKNOWN COMMAND\n");
+		
+	}
+
+
+ //    printf("pathname is: %s\n", fat_image);
+	// init_env(&bpb, fat_image, &current_cluster, pwd);
+ //    info(&bpb);
+ //    ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
+ //    char* temp = "RED";
+ //    //size
+	// printf("SIZE\n");
+
+	// ls(&bpb, fat_image, current_cluster, 0, 1, temp);
+ //    // cd
+	// printf("current cluster before cd: %d\n", current_cluster);
+	// current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
+	// printf("current cluster after cd: %d\n", current_cluster);
+	// ls(&bpb, fat_image, current_cluster, 0,0, NULL);
+	// printf("current cluster before cd: %d\n", current_cluster);
+	// current_cluster = ls(&bpb, fat_image, current_cluster, 1,0, temp);
+	// printf("current cluster after cd: %d\n", current_cluster);
+	// ls(&bpb, fat_image, current_cluster, 0,0, NULL);
 
 	//ls();
     return 0;
