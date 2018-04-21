@@ -83,6 +83,13 @@ uint32_t first_sector_of_cluster(FAT32BootBlock* bpb, uint32_t cluster_num)
 	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector(bpb))*512;
 }
 
+/*
+
+	Calculates the offset counted from the beginning of the file to the 
+	fat table entry given cluster number. In case of ls, we give it a current_cluster
+	and it returns the address of the entry which tells us where directory continues. 
+
+*/
 uint32_t cluster_to_byte_address(FAT32BootBlock* bpb, uint32_t cluster_num)
 {
 	uint32_t this_offset = cluster_num*4;
@@ -92,6 +99,9 @@ uint32_t cluster_to_byte_address(FAT32BootBlock* bpb, uint32_t cluster_num)
 	return this_sector_number * bpb->sector_size + this_ent_offset;
 }
 
+/*
+	Given offset from the beginning of the file, reads in fat entry. 
+*/
 uint32_t look_up_fat(FAT32BootBlock* bpb, char* fat_image, uint32_t offset)
 {
 	FILE *ptr_img;
@@ -103,6 +113,10 @@ uint32_t look_up_fat(FAT32BootBlock* bpb, char* fat_image, uint32_t offset)
 	return (fat_entry);
 }
 
+/*
+	Gets rid of trailing whitespace in filenames and inserts dots 
+	before extensions.
+*/
 void process_filenames(DirectoryEntry* dir_array, int length)
 {
 	int i = 0;
@@ -128,6 +142,11 @@ void process_filenames(DirectoryEntry* dir_array, int length)
 	}
 }
 
+/*
+
+	Iterate over a directory and read in its contents to the dir_array[16]
+	Calls process_filenames to normalize names (insert dots, get rid of garbage, whitespace etc)
+*/
 void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image, DirectoryEntry* dir_array)
 {
 	int counter;
@@ -155,7 +174,17 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 
 /* ************************************************************************************************
 	
-	Reads into the boot block and stores it inside the bpb global variable,
+	args: 
+		FAT32BootBlock bpb is a FAT info struct from alike the one in boot block
+		char* fat_image is a path to the filesystem image
+		uint32_t* current_cluster is a pointer to a variable created in main, 
+				init_env sets it to 2 (root cluster on FAT32)
+		char* pwd is pointer to a char array stored in main representing the current working directory,
+				init_env sets it to '/' representing root
+	returns: void
+
+
+	Reads info from the boot block and stores it inside the bpb variable,
 	of type FAT32BootBlock. Per specification, FAT32BootBlock__attribue((packed)), 
 	takes care of endianness of the system. 
 
@@ -183,6 +212,15 @@ void init_env(FAT32BootBlock * bpb, char* fat_image, uint32_t * current_cluster,
 	*current_cluster = bpb-> bpb_rootcluster;
 	strcpy(pwd, "/");
 }
+
+/*
+
+	args: FAT32BootBlock * bpb
+	returns: void
+
+	Prints the information about the partition required in the assignment specification.
+
+*/
 void info(FAT32BootBlock * bpb)
 {
 	printf("Bytes per sector: %d\n", bpb->sector_size);
@@ -195,6 +233,28 @@ void info(FAT32BootBlock * bpb)
 
 
 /*
+
+	args: 
+		FAT32BootBlock * bpb
+		char* fat_image is a path to the filesystem image
+		uint32_t current_cluster - cluster representing working directory
+		int cd (1 or 0, True or False) 
+		int size (1 or 0, True or False) 
+		char* dirname - name of the direcory to cd to or NULL if cd is False.
+
+		If cd == 0 and size == 0 then print the contents of the directory. 
+		If directory takes more then one cluster, look_up_fat function finds the cluster
+		where the directory continues. 
+		
+		if cd == 1, iterate over the files in the current directory, if match is found 
+		change the current directory to the specified directory by returning 
+		DirectoryEntry.FstClusLO
+		
+		if size == 1 and match for filename is found return the size of the file
+	
+	returns: cluster_number
+
+
 ls DIRNAMEPrint the contents of DIRNAME including the “.” and “..” directories. For simplicity, 
 just print each of the directory entries on separate lines (similar to the way ls -l does in Linux 
 shells)Print an error if DIRNAME does not exist or is not a directory.
@@ -204,8 +264,12 @@ shells)Print an error if DIRNAME does not exist or is not a directory.
 uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int cd, int size, char* dirname)
 {
 	DirectoryEntry dir_array[16];
+	DirectoryEntry de;
+	DirectoryEntry other;
+
+	// get the start of the actual content of the directory
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
-	//uint32_t byte_address = cluster_to_byte_address(bpb, FirstSectorofCluster);
+
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
 	if (!ptr_img)
@@ -213,20 +277,22 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 		printf("Unable to open the file image.");
 		return 0;
 	}
-	DirectoryEntry de;
-	DirectoryEntry other;
+	
 
-	//printf("RootDirClusterAddr %d\n",byte_address);	
-
-	//printf("FirstSectorofCluster %d\n",FirstSectorofCluster);
 	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
 	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
-	
 	fclose(ptr_img);
+
+	// 
 	populate_dir(bpb, FirstSectorofCluster, fat_image, dir_array);
 	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
 
 
+	/* if cd is True and dirname != NULL
+		try to match given dirname with fetched directory names
+		For now "Green" is hardcoded, once we handle user inputs we will
+		compare to dirname
+	*/
 	if (cd == 1 && dirname){
 		int j;
 		for (j= 0; j < 16; ++j)
@@ -240,6 +306,11 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 		}
 
 	}
+	/*  if size is True and dirname != NULL
+		try to match given dirname with fetched directory names
+		For now "A" is hardcoded, once we handle user inputs we will
+		compare to dirname
+	*/
 	else if(size == 1 && dirname)
 	{
 		int j;
@@ -251,7 +322,7 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 
 		}
 	}
-	else{
+	else{ //cd and size false so we are dealing we normal ls, print the content of directory 
 		int j;
 		for (j= 0; j < 16; ++j)
 		{
@@ -262,10 +333,10 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 	}
 
 
-	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){
+	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){ 
 		printf("END OF THE DIRECTORY. \n");
-	}else{
-		return ls(bpb, fat_image, fat_entry, 0,0, NULL);
+	}else{ // it is not the end of dir, call ls again with cluster_number returned from fat table
+		return ls(bpb, fat_image, fat_entry, 0,0, NULL); 
 	}
 
 
