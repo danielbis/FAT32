@@ -189,7 +189,6 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 		char* fat_image is a path to the filesystem image
 		uint32_t* current_cluster is a pointer to a variable created in main, 
 				init_env sets it to 2 (root cluster on FAT32)
-
 	returns: void
 
 
@@ -419,10 +418,11 @@ int main(int argc,char* argv[])
     {
         strcpy(fat_image,argv[1]);
     }
-    /////////////////////////////////////////////////////////////////////////
+
+    // ///////////////////////////////////////////////////////////////////////
     /* 		initialize the environment, read in the boot block  		*/
     init_env(&bpb, fat_image, &current_cluster);
-    /////////////////////////////////////////////////////////////////////////
+    // ///////////////////////////////////////////////////////////////////////
 
     char cmd[MAXCHAR];
 	char* command = NULL;
@@ -511,8 +511,6 @@ int main(int argc,char* argv[])
 	}while(strcmp(command, "exit") != 0);
 
 
- //    printf("pathname is: %s\n", fat_image);
-	// 
  //    info(&bpb);
  //    ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
  //    char* temp = "RED";
