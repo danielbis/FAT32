@@ -8,6 +8,53 @@
 
 #define MAXCHAR 250
 #define CHARCOMMAND 50
+#define TRUE 1
+#define FALSE 0
+typedef int bool;
+
+#define Partition_LBA_Begin 0 //first byte of the partition
+#define ENTRIES_PER_SECTOR 16
+#define DIR_SIZE 32 //in bytes
+#define SECTOR_SIZE 64//in bytes
+#define FAT_ENTRY_SIZE 4//in bytes
+#define MAX_FILENAME_SIZE 8
+#define MAX_EXTENTION_SIZE 3
+
+//open file codes
+#define MODE_READ 0
+#define MODE_WRITE 1
+#define MODE_BOTH 2
+#define MODE_UNKNOWN 3 //when first created and directories
+
+const uint8_t ATTR_READ_ONLY = 0x01;
+const uint8_t ATTR_HIDDEN = 0x02;
+const uint8_t ATTR_SYSTEM = 0x04;
+const uint8_t ATTR_VOLUME_ID = 0x08;
+const uint8_t ATTR_DIRECTORY = 0x10;
+const uint8_t ATTR_ARCHIVE = 0x20;
+const uint8_t ATTR_LONG_NAME = 0x0F;
+
+
+
+uint32_t FAT_FREE_CLUSTER = 0x00000000;
+uint32_t FAT_EOC = 0x0FFFFFF8;
+uint32_t MASK_IGNORE_MSB = 0x0FFFFFFF;
+
+
+//uint32_t FAT_EOC = 0x0FFFFFF8;
+
+typedef struct 
+{
+    uint8_t filename[9];
+    uint8_t extention[4];
+    char parent[100];
+    uint32_t firstCluster;
+    int mode;
+    uint32_t size;
+    bool dir; //is it a directory
+    bool isOpen;
+    uint8_t fullFilename[13];
+} __attribute((packed)) FILEDESCRIPTOR;
 
 /*
  * Arrays storing our current position in the file
@@ -63,6 +110,33 @@ typedef struct
 		uint16_t FstClusLO;     /* byte 26-27;  Low word of this entry's first cluster number.  */
 		uint32_t FileSize;      /* byte 28 - 31; 32bit DWORD holding this file's size in bytes */
 }__attribute((packed)) DirectoryEntry;
+
+
+/*These need to be redone, basically copied to get working prototype */// //////////////////////////////////////////////////
+int sectorsInDataRegion(FAT32BootBlock* bs);
+int countOfClusters(FAT32BootBlock* bs);
+uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs);
+int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal);
+int createEntry(DirectoryEntry * entry,
+			const char * filename, 
+			const char * ext,
+			int isDir,
+			uint32_t firstCluster,
+			uint32_t filesize,
+            bool emptyAfterThis,
+            bool emptyDirectory);
+int makeSpecialDirEntries(DirectoryEntry * dot, 
+						DirectoryEntry * dotDot,
+						uint32_t newlyAllocatedCluster,
+						uint32_t pwdCluster );
+uint32_t getLastClusterInChain(char* fat_image,FAT32BootBlock * bs, uint32_t firstClusterVal);
+uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t clusterChainMember);
+//uint32_t FAT_findNextOpenEntry(FAT32BootBlock* bs, uint32_t pwdCluster);
+uint32_t getFileSizeInClusters(char* fat_image,FAT32BootBlock* bs, uint32_t firstClusterVal);
+uint32_t FAT_findNextOpenEntry(char* fat_image,FAT32BootBlock* bs, uint32_t pwdCluster);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 /* ************************************************************************************************
  *
@@ -400,72 +474,7 @@ i*FAT32DirectoryStructureCreatedByYou < sector_size•When that happens, lookup 
 then current_cluster_number = FAT[current_cluster_number]. Do step 3 - 5 by resetting i•Else, break
 */
 // ================= KAKAREKO ======================
-uint32_t FAT_FREE_CLUSTER = 0x00000000;
-uint32_t FAT_EOC = 0x0FFFFFF8;
-uint32_t MASK_IGNORE_MSB = 0x0FFFFFFF;
 
-#define TRUE 1
-#define FALSE 0
-typedef int bool;
-
-const uint8_t ATTR_READ_ONLY = 0x01;
-const uint8_t ATTR_HIDDEN = 0x02;
-const uint8_t ATTR_SYSTEM = 0x04;
-const uint8_t ATTR_VOLUME_ID = 0x08;
-const uint8_t ATTR_DIRECTORY = 0x10;
-const uint8_t ATTR_ARCHIVE = 0x20;
-const uint8_t ATTR_LONG_NAME = 0x0F;
-
-#define Partition_LBA_Begin 0 //first byte of the partition
-#define ENTRIES_PER_SECTOR 16
-#define DIR_SIZE 32 //in bytes
-#define SECTOR_SIZE 64//in bytes
-#define FAT_ENTRY_SIZE 4//in bytes
-#define MAX_FILENAME_SIZE 8
-#define MAX_EXTENTION_SIZE 3
-
-//open file codes
-#define MODE_READ 0
-#define MODE_WRITE 1
-#define MODE_BOTH 2
-#define MODE_UNKNOWN 3 //when first created and directories
-//uint32_t FAT_EOC = 0x0FFFFFF8;
-
-typedef struct 
-{
-    uint8_t filename[9];
-    uint8_t extention[4];
-    char parent[100];
-    uint32_t firstCluster;
-    int mode;
-    uint32_t size;
-    bool dir; //is it a directory
-    bool isOpen;
-    uint8_t fullFilename[13];
-} __attribute((packed)) FILEDESCRIPTOR;
-
-uint32_t FAT_getFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t clusterNum);
-int sectorsInDataRegion(FAT32BootBlock* bs);
-int countOfClusters(FAT32BootBlock* bs);
-uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs);
-int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal);
-int createEntry(DirectoryEntry * entry,
-			const char * filename, 
-			const char * ext,
-			int isDir,
-			uint32_t firstCluster,
-			uint32_t filesize,
-            bool emptyAfterThis,
-            bool emptyDirectory);
-int makeSpecialDirEntries(DirectoryEntry * dot, 
-						DirectoryEntry * dotDot,
-						uint32_t newlyAllocatedCluster,
-						uint32_t pwdCluster );
-uint32_t getLastClusterInChain(char* fat_image,FAT32BootBlock * bs, uint32_t firstClusterVal);
-uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t clusterChainMember);
-//uint32_t FAT_findNextOpenEntry(FAT32BootBlock* bs, uint32_t pwdCluster);
-int getFileSizeInClusters(char* fat_image,FAT32BootBlock* bs, uint32_t firstClusterVal);
-uint32_t FAT_findNextOpenEntry(char* fat_image,FAT32BootBlock* bs, uint32_t pwdCluster);
 
 int sectorsInDataRegion(FAT32BootBlock* bs) 
 {
@@ -502,14 +511,14 @@ uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs)
             break;
         i++;
     }
-    return i;
+    return i; // FAT is FULL
 }
 
 
 int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal) 
 {
     
-    FILE* f = fopen(fat_image, "r+");
+    FILE* f = fopen(fat_image, "rb+");
 
     fseek(f, cluster_to_byte_address(bs, destinationCluster), 0);
     fwrite(newFatVal, 4, 1, f);
@@ -553,13 +562,16 @@ int createEntry(DirectoryEntry * entry,
             else
                 entry->Name[x] = ' ';
         }
-
-        for(x = 0; x < MAX_EXTENTION_SIZE; x++) {
+        if (ext)
+        {
+        	for(x = 0; x < MAX_EXTENTION_SIZE; x++) {
             if(x < strlen(ext))
                 entry->Name[MAX_FILENAME_SIZE + x] = ext[x];
             else
                 entry->Name[MAX_FILENAME_SIZE + x] = ' ';
+        	}
         }
+        
 
         //decompose address
         entry->FstClusLO = firstCluster;
@@ -644,10 +656,10 @@ uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t c
     return firstFreeCluster;
 }
 
-int getFileSizeInClusters(char* fat_image, FAT32BootBlock* bs, uint32_t firstClusterVal) 
+uint32_t getFileSizeInClusters(char* fat_image, FAT32BootBlock* bs, uint32_t firstClusterVal) 
 {
-    int size = 1;
-    firstClusterVal = (int) look_up_fat(bs, fat_image, cluster_to_byte_address(bs, firstClusterVal));
+    uint32_t size = 1;
+    firstClusterVal = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, firstClusterVal));
     //printf("\ngetFileSizeInClusters: %d    ", firstClusterVal);
     while((firstClusterVal = (firstClusterVal & MASK_IGNORE_MSB)) < FAT_EOC) {
        
@@ -671,7 +683,8 @@ uint32_t byteOffsetOfCluster(FAT32BootBlock* bs, uint32_t clusterNum)
 DirectoryEntry * readEntry(char* fat_image, FAT32BootBlock* bs, DirectoryEntry * entry, uint32_t clusterNum, int offset)
 {
     offset *= 32;
-    uint32_t dataAddress = byteOffsetOfCluster(bs, clusterNum);
+    printf("HERE DIR_ENTRY READ\n");
+    uint32_t dataAddress = first_sector_of_cluster(bs, clusterNum);
     
     FILE* f = fopen(fat_image, "r");
     fseek(f, dataAddress + offset, 0);
@@ -687,7 +700,7 @@ uint32_t byteOffsetofDirectoryEntry(FAT32BootBlock* bs, uint32_t clusterNum, int
     printf("\nbyteOffsetofDirectoryEntry: passed in offset->%d\n", offset);
     offset *= 32;
     printf("\nbyteOffsetofDirectoryEntry: offset*32->%d\n", offset);
-    uint32_t dataAddress = byteOffsetOfCluster(bs, clusterNum);
+    uint32_t dataAddress = first_sector_of_cluster(bs, clusterNum);
     printf("\nbyteOffsetofDirectoryEntry: clusterNum: %d, offset: %d, returning: %d\n", clusterNum, offset, (dataAddress + offset));
     return (dataAddress + offset);
 }
@@ -769,12 +782,12 @@ uint32_t FAT_findNextOpenEntry(char* fat_image, FAT32BootBlock* bs, uint32_t pwd
 	DirectoryEntry dir;
     FILEDESCRIPTOR fd;
 
-    int dirSizeInCluster = getFileSizeInClusters(fat_image, bs, pwdCluster);
+    uint32_t dirSizeInCluster = getFileSizeInClusters(fat_image, bs, pwdCluster);
     //printf("dir Size: %d\n", dirSizeInCluster);
-    int clusterCount;
+    uint32_t clusterCount;
     char fileName[12];
-    int offset;
-    int increment = 2;
+    uint32_t offset;
+    uint32_t increment = 2;
     //each dir is a cluster
     for(clusterCount = 0; clusterCount < dirSizeInCluster; clusterCount++) 
     {
@@ -784,9 +797,9 @@ uint32_t FAT_findNextOpenEntry(char* fat_image, FAT32BootBlock* bs, uint32_t pwd
 			printf("\nFAT_findNextOpenEntry: offset->%d\n", offset);
             readEntry(fat_image, bs, &dir, pwdCluster, offset);
             //printf("\ncluster num: %d\n", pwdCluster);
-            makeFileDecriptor(&dir, &fd);
+            //makeFileDecriptor(&dir, &fd);
 
-            if( isEntryEmpty(&fd) == TRUE ) {
+            if( dir.Name[0] == 0x00 || dir.Name[0] == 0xE5 /*isEntryEmpty(&fd) == TRUE */) {
                 //this should tell me exactly where to write my new entry to
                 //printf("cluster #%d, byte offset: %d: ", offset, byteOffsetofDirectoryEntry(bs, pwdCluster, offset));             
                 return byteOffsetofDirectoryEntry(bs, pwdCluster, offset);
@@ -841,14 +854,19 @@ int mkdir(char* fat_image, FAT32BootBlock* bs, const char * dirName, const char 
     // struct DIR_ENTRY newDirEntry;
     DirectoryEntry newDirEntry;
     //write directory entry to pwd
+    printf("\t\t*****************starting MKDIR *******************\n");
     uint32_t beginNewDirClusterChain = FAT_findFirstFreeCluster(fat_image, bs); // free cluster
+    printf("\t\t*****************Before FAT_writeFatEntry *******************\n");
     FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, &FAT_EOC); //mark that its End of Cluster
+    printf("\t\t*****************Before CreateEntry *******************\n");
     createEntry(&newDirEntry, dirName, extention, TRUE, beginNewDirClusterChain, 0, FALSE, FALSE);
+    printf("\t\t*****************Before Write File Entry *******************\n");
+
     writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
     
     //writing dot entries to newly allocated cluster chain
-    writeFileEntry(fat_image, bs, &newDirEntry, beginNewDirClusterChain, TRUE);
-   
+    //writeFileEntry(fat_image, bs, &newDirEntry, beginNewDirClusterChain, TRUE);
+   return 0;
 }
 // ================= KAKAREKO END ==================
 
