@@ -248,6 +248,16 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 	process_filenames(dir_array, 16);
 }
 
+/* description: pass in a entry and this properly formats the
+ * "firstCluster" from the 2 byte segments in the file structure
+ */
+uint32_t buildClusterAddress(DirectoryEntry * entry) {
+    uint32_t addr = 0x00000000;
+
+    addr |=  entry->FstClusHI << 16;
+    addr |=  entry->FstClusLO;
+    return addr;
+}
 
 
 /* ************************************************************************************************
@@ -402,12 +412,12 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 			}
 			else if (strcmp(dir_array[j].Name, dirname) == 0 && dir_array[j].Attr == 0x10){
 				PATH_INDEX += 1;
-				CLUSTER_PATH[PATH_INDEX] = dir_array[j].FstClusLO;
+				CLUSTER_PATH[PATH_INDEX] = buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
 				PATH[PATH_INDEX] = malloc(128 * sizeof(char));
 				strcpy(PATH[PATH_INDEX],dir_array[j].Name);
 				CLUSTER_PATH[PATH_INDEX+1] = 0; // dummy element
 				PATH[PATH_INDEX+1] = NULL; // dummy element
-				return dir_array[j].FstClusLO;
+				return buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
 			}
 		}
 
@@ -452,26 +462,12 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 
 
 }
-//FirstSectorofCluster = FirstDataSector;
 
-	//FirstSectorofCluster = FirstDataSector;
-/*
-•Make a directory structure like the 
-FAT32DirectoryBlock (remember to reserve some space for the long entry)
+/***********************************************************************/
 
-•Call an ls function ls(int current_cluster_number {should be the first_cluster_number of a directory})
+/* MKDIR RELATED BELOW  */
 
-•Function looks up all directories inside the current directory 
-( fseek, and i*FAT32DirectoryStructureCreatedByYou, where ‘i’ is a counter)
-
-•Iterate the above step while the  
-i*FAT32DirectoryStructureCreatedByYou < sector_size•When that happens, lookup FAT[current_cluster_number]
-
-•If FAT[current_cluster_number] != 0x0FFFFFF8 or 0x0FFFFFFF or 0x00000000, 
-then current_cluster_number = FAT[current_cluster_number]. Do step 3 - 5 by resetting i•Else, break
-*/
-// ================= KAKAREKO ======================
-
+// /////////////////////////// ////////////////////////////////////////// //
 
 int sectorsInDataRegion(FAT32BootBlock* bs) 
 {
@@ -702,37 +698,26 @@ uint32_t byteOffsetofDirectoryEntry(FAT32BootBlock* bs, uint32_t clusterNum, int
     return (dataAddress + offset);
 }
 
-/* description: pass in a entry and this properly formats the
- * "firstCluster" from the 2 byte segments in the file structure
- */
-uint32_t buildClusterAddress(DirectoryEntry * entry) {
-    uint32_t firstCluster = 0x00000000;
-    //FstClusHI;
-	//FstClusLO;
-    // firstCluster |=  entry->hiCluster[1] << 24;
-    // firstCluster |=  entry->hiCluster[0] << 16;
-    // firstCluster |=  entry->loCluster[1] << 8;
-    // firstCluster |=  entry->loCluster[0];
 
-    firstCluster |=  entry->FstClusHI << 24;
-    firstCluster |=  entry->FstClusHI << 16;
-    firstCluster |=  entry->FstClusLO << 8;
-    firstCluster |=  entry->FstClusLO;
-    return firstCluster;
-}
+/*	FOR NOW USELESS
 
-/* descriptioin: takes a FILEDESCRIPTOR and checks if the entry it was
+ descriptioin: takes a FILEDESCRIPTOR and checks if the entry it was
  * created from is empty. Helper function
- */ 
+  
 bool isEntryEmpty(FILEDESCRIPTOR * fd) {
     if((fd->filename[0] != 0x00) && (fd->filename[0] != 0xE5) )
         return FALSE;
     else
         return TRUE;
 }
-/* description: takes a directory entry populates a file descriptor 
+*/
+
+
+/* FOR NOW USELESS
+
+	description: takes a directory entry populates a file descriptor 
  * to be used in the file tables
- * */
+ * 
 FILEDESCRIPTOR * makeFileDecriptor(DirectoryEntry * entry, FILEDESCRIPTOR * fd) 
 {
     char newFilename[12];
@@ -768,7 +753,9 @@ FILEDESCRIPTOR * makeFileDecriptor(DirectoryEntry * entry, FILEDESCRIPTOR * fd)
     else
         fd->dir = FALSE;
     return fd;
-}
+}*/
+
+
 /*
 	Finds an oopn slot for a new directory entry in a given cluster aka current dir
 */
