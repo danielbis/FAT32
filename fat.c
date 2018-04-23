@@ -385,8 +385,6 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 
 	/* if cd is True and dirname != NULL
 		try to match given dirname with fetched directory names
-		For now "Green" is hardcoded, once we handle user inputs we will
-		compare to dirname
 	*/
 	if (cd == 1 && dirname){
 		int j;
@@ -405,7 +403,6 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 			else if (strcmp(dir_array[j].Name, dirname) == 0 && dir_array[j].Attr == 0x10){
 				PATH_INDEX += 1;
 				CLUSTER_PATH[PATH_INDEX] = dir_array[j].FstClusLO;
-				printf("%s \n", dir_array[j].Name );
 				PATH[PATH_INDEX] = malloc(128 * sizeof(char));
 				strcpy(PATH[PATH_INDEX],dir_array[j].Name);
 				CLUSTER_PATH[PATH_INDEX+1] = 0; // dummy element
@@ -865,7 +862,7 @@ int mkdir(char* fat_image, FAT32BootBlock* bs, const char * dirName, const char 
     writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
     
     //writing dot entries to newly allocated cluster chain
-    //writeFileEntry(fat_image, bs, &newDirEntry, beginNewDirClusterChain, TRUE);
+    writeFileEntry(fat_image, bs, &newDirEntry, beginNewDirClusterChain, TRUE);
    return 0;
 }
 // ================= KAKAREKO END ==================
@@ -896,7 +893,6 @@ int main(int argc,char* argv[])
     char cmd[MAXCHAR];
 	char* command = NULL;
 	const char* test_dir = "TEST";
-	mkdir(fat_image, &bpb, test_dir, NULL, 2);
 	do {
 		fgets(cmd, sizeof(cmd), stdin);
 		char * args;
@@ -921,13 +917,13 @@ int main(int argc,char* argv[])
 
 			// first cd to the given dir if such exists
 			current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, args);
-
 			// do ls
-			current_cluster = ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
+			ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
 
 			// cd back if we are not in the root
-			if (current_cluster != bpb.bpb_rootcluster)
+			if (current_cluster != bpb.bpb_rootcluster && strcmp(args, ".") != 0)
 				current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, "..");
+
 			printf("PATH[PATH_INDEX]: %s\n", PATH[PATH_INDEX]);
 
 			//printf("DirName: %s\n", cmd);
@@ -949,6 +945,8 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "mkdir") == 0)) {
 			printf("MKDIR\n");
+			mkdir(fat_image, &bpb, args, NULL, current_cluster);
+
 			/*Part 7: mkdir DIRNAME*/
 
 		} else if ((strcmp(command, "rm") == 0)) {
