@@ -593,13 +593,6 @@ int createEntry(DirectoryEntry * entry,
     for(x = 1; x < 11; x++) 
         entry->Name[x] = 0x00;
     
-	// entry->loCluster[0] = 0x00;
- //    entry->loCluster[1] = 0x00;
- //    entry->hiCluster[0] = 0x00;
- //    entry->hiCluster[1] = 0x00;
-	// entry->attributes = 0x00;
-	// entry->fileSize = 0;
-
 	entry->FstClusHI = 0x00; 
 	entry->FstClusLO = 0x00; 
 	entry->Attr = 0x00; 
