@@ -63,8 +63,9 @@ typedef struct
  * PATH_INDEX represents the index of last element in both tables
  */
 uint32_t CLUSTER_PATH[128];  //stores cluster path for easy .. exec
-char* PATH[128];  // stores path as an array of dir names for easy .. exec
 unsigned int PATH_INDEX;
+uint32_t current_cluster;
+
 
 typedef struct 
 {
@@ -122,13 +123,7 @@ int createEntry(DirectoryEntry * entry,
 			const char * ext,
 			int isDir,
 			uint32_t firstCluster,
-			uint32_t filesize,
-            bool emptyAfterThis,
-            bool emptyDirectory);
-int makeSpecialDirEntries(DirectoryEntry * dot, 
-						DirectoryEntry * dotDot,
-						uint32_t newlyAllocatedCluster,
-						uint32_t pwdCluster );
+			uint32_t filesize );
 uint32_t getLastClusterInChain(char* fat_image,FAT32BootBlock * bs, uint32_t firstClusterVal);
 uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t clusterChainMember);
 //uint32_t FAT_findNextOpenEntry(FAT32BootBlock* bs, uint32_t pwdCluster);
@@ -149,22 +144,17 @@ uint32_t root_dir_sector_count(FAT32BootBlock* bpb)
 	return ((bpb->root_dir_entries * 32) + (bpb->sector_size - 1)) / bpb->sector_size;
 
 }
-/*
-  	FirstDataSector is the Sector where data region starts (should be something
-	around 100400 in hex)
-
- */
-uint32_t first_data_sector(FAT32BootBlock* bpb)
-{
-	return bpb->reserved_sectors + (bpb->number_of_fats * bpb->bpb_FATz32)+ root_dir_sector_count(bpb);
-}
 
 /*
   		Finds first data sector for given cluster number
  */
 uint32_t first_sector_of_cluster(FAT32BootBlock* bpb, uint32_t cluster_num)
 {
-	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector(bpb))*512;
+	uint32_t first_data_sector = bpb->reserved_sectors + (bpb->number_of_fats * bpb->bpb_FATz32)+ root_dir_sector_count(bpb);
+	if (first_data_sector * 512 != 100400){
+		printf("FIRST DATA SECTOR WARNING: %d\n", first_data_sector);
+	}
+	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector)*512;
 }
 
 /*
@@ -216,7 +206,8 @@ void process_filenames(DirectoryEntry* dir_array, int length)
 			char *white_space = strstr(dir_array[i].Name," ");
 			if ((white_space) && isspace(*white_space) && isalpha(*(white_space+1))){
 				*white_space = '.';
-			}
+			}		uint16_t FstClusLO;     /* byte 26-27;  Low word of this entry's first cluster number.  */
+
 			white_space = strstr(dir_array[i].Name," ");
 			if ((white_space) && isspace(*white_space)){
 				*white_space = '\0';
@@ -311,8 +302,6 @@ void init_env(FAT32BootBlock * bpb, char* fat_image, uint32_t * current_cluster)
 	{
 		PATH[i] = malloc(128 * sizeof(char));
 	}*/
-	PATH[0] = malloc(3 * sizeof(char));
-	strcpy(PATH[0], "/");
 	//PATH[1] = NULL; // NULL indicates invalid entry, end of the potential iteration
 	PATH_INDEX = 0;
 
@@ -402,8 +391,6 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 		{
 			if (strcmp(dirname, "..") == 0 && strcmp(dir_array[j].Name, "..") == 0 && dir_array[j].Attr == 0x10){
 				CLUSTER_PATH[PATH_INDEX] = 0; // dummy element in place of current dir
-				free(PATH[PATH_INDEX]);
-				PATH[PATH_INDEX] = NULL; // dummy element in place of current dir
 				PATH_INDEX -= 1; // go up in the path
 				return CLUSTER_PATH[PATH_INDEX]; //parent_cluster;
 			}
@@ -413,10 +400,7 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 			else if (strcmp(dir_array[j].Name, dirname) == 0 && dir_array[j].Attr == 0x10){
 				PATH_INDEX += 1;
 				CLUSTER_PATH[PATH_INDEX] = buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
-				PATH[PATH_INDEX] = malloc(128 * sizeof(char));
-				strcpy(PATH[PATH_INDEX],dir_array[j].Name);
 				CLUSTER_PATH[PATH_INDEX+1] = 0; // dummy element
-				PATH[PATH_INDEX+1] = NULL; // dummy element
 				return buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
 			}
 		}
@@ -493,20 +477,39 @@ int countOfClusters(FAT32BootBlock* bs)
 	return sectorsInDataRegion(bs) / bs->sectors_per_cluster;
 }
 
+uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs) 
+{
+        FILE *fp = fopen(fat_image, "rb+"); 
 
+        int i = current_cluster;
+        int k;
+        int fatlookup = 1;
+
+        while(fatlookup != 0x00000000)
+        {
+                k = 0x4000 + i*sizeof(int);
+                fseek(fp, k, SEEK_SET);
+                fread(&fatlookup, sizeof(int), 1, fp);
+                i++;
+        }
+
+        fclose(fp);
+        return i;
+}
+/*
 uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs) 
 {
     uint32_t i = 0;
     uint32_t totalClusters = (uint32_t) countOfClusters(bs);
     while(i < totalClusters) 
     {
-        if(((look_up_fat(bs, fat_image, cluster_to_byte_address(bs, i)) & MASK_IGNORE_MSB) | FAT_FREE_CLUSTER) == FAT_FREE_CLUSTER)
+        if ((look_up_fat(bs, fat_image, cluster_to_byte_address(bs, i)) == FAT_FREE_CLUSTER))
             break;
         i++;
     }
     return i; // FAT is FULL
 }
-
+*/
 
 int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal) 
 {
@@ -530,9 +533,7 @@ int createEntry(DirectoryEntry * entry,
 			const char * ext,
 			int isDir,
 			uint32_t firstCluster,
-			uint32_t filesize,
-            bool emptyAfterThis,
-            bool emptyDirectory) 
+			uint32_t filesize) 
 {
 	
     //set the same no matter the entry
@@ -546,72 +547,40 @@ int createEntry(DirectoryEntry * entry,
 	entry->WrtTime = 0;
 	entry->WrtDate = 0;
 
-    if(emptyAfterThis == FALSE && emptyDirectory == FALSE) 
-    { //if both are false
-        int x;
-        for(x = 0; x < MAX_FILENAME_SIZE; x++) {
-            if(x < strlen(filename))
-                entry->Name[x] = filename[x];
-            else
-                entry->Name[x] = ' ';
-        }
-        if (ext)
-        {
-        	for(x = 0; x < MAX_EXTENTION_SIZE; x++) {
-            if(x < strlen(ext))
-                entry->Name[MAX_FILENAME_SIZE + x] = ext[x];
-            else
-                entry->Name[MAX_FILENAME_SIZE + x] = ' ';
-        	}
-        }
-        
-
-        //decompose address
-        entry->FstClusLO = firstCluster;
-		entry->FstClusHI = firstCluster >> 16;  
-
-        if(isDir == TRUE) {
-            entry->FileSize = 0;
-            entry->Attr = ATTR_DIRECTORY;
-		} else {
-            entry->FileSize = filesize;
-            entry->Attr = ATTR_ARCHIVE;
-		}
-        return 0; //stops execution so we don't flow out into empty entry config code below
-        
-    } else if(emptyAfterThis == TRUE) { //if this isn't true, then the other must be
-        entry->Name[0] = 0xE5;
-        entry->Attr = 0x00;
-    }else {                             //hence no condition check here
-        entry->Name[0] = 0x00;
-        entry->Attr = 0x00;
+    int x;
+    for(x = 0; x < MAX_FILENAME_SIZE; x++) {
+        if(x < strlen(filename))
+            entry->Name[x] = filename[x];
+        else
+            entry->Name[x] = ' ';
+    }
+    if (ext)
+    {
+    	for(x = 0; x < MAX_EXTENTION_SIZE; x++) {
+        if(x < strlen(ext))
+            entry->Name[MAX_FILENAME_SIZE + x] = ext[x];
+        else
+            entry->Name[MAX_FILENAME_SIZE + x] = ' ';
+    	}
     }
     
-    //if i made it here we're creating an empty entry and both conditions
-    //require this setup
-    int x;
-    for(x = 1; x < 11; x++) 
-        entry->Name[x] = 0x00;
-    
-	entry->FstClusHI = 0x00; 
-	entry->FstClusLO = 0x00; 
-	entry->Attr = 0x00; 
-	entry->FileSize = 0;
-    return 0;
+
+    //decompose address
+    entry->FstClusLO = firstCluster;
+	entry->FstClusHI = firstCluster >> 16;  
+	// entry->FstClusLO = current_cluster/0x100;
+	// entry->FstClusHI = current_cluster % 0x100;
+
+    if(isDir == TRUE) {
+        entry->FileSize = 0;
+        entry->Attr = ATTR_DIRECTORY;
+	} else {
+        entry->FileSize = filesize;
+        entry->Attr = ATTR_ARCHIVE;
+	}
+    return 0; //stops execution so we don't flow out into empty entry config code below
 }
 
-
-// /* ---------- */
-// //writeFileEntry
-int makeSpecialDirEntries(DirectoryEntry * dot, 
-						DirectoryEntry * dotDot,
-						uint32_t newlyAllocatedCluster,
-						uint32_t pwdCluster ) 
-{
-	createEntry(dot, ".", "", TRUE, newlyAllocatedCluster, 0, FALSE, FALSE);	
-	createEntry(dotDot, "..", "", TRUE, pwdCluster, 0, FALSE, FALSE);	
-	return 0;
-}
 
 
 uint32_t getLastClusterInChain(char* fat_image,FAT32BootBlock * bs, uint32_t firstClusterVal) 
@@ -692,61 +661,7 @@ uint32_t byteOffsetofDirectoryEntry(FAT32BootBlock* bs, uint32_t clusterNum, int
 }
 
 
-/*	FOR NOW USELESS
 
- descriptioin: takes a FILEDESCRIPTOR and checks if the entry it was
- * created from is empty. Helper function
-  
-bool isEntryEmpty(FILEDESCRIPTOR * fd) {
-    if((fd->filename[0] != 0x00) && (fd->filename[0] != 0xE5) )
-        return FALSE;
-    else
-        return TRUE;
-}
-*/
-
-
-/* FOR NOW USELESS
-
-	description: takes a directory entry populates a file descriptor 
- * to be used in the file tables
- * 
-FILEDESCRIPTOR * makeFileDecriptor(DirectoryEntry * entry, FILEDESCRIPTOR * fd) 
-{
-    char newFilename[12];
-    bzero(fd->filename, 9);
-    bzero(fd->extention, 4);
-    memcpy(newFilename, entry->Name, 11);
-    newFilename[11] = '\0';
-    int x;
-    for(x = 0; x < 8; x++) {
-        if(newFilename[x] == ' ')
-            break;
-        fd->filename[x] = newFilename[x];
-    }
-    fd->filename[++x] = '\0';
-    for(x = 8; x < 11; x++) {
-        if(newFilename[x] == ' ')
-            break;
-        fd->extention[x - 8] = newFilename[x];
-    }
-    fd->extention[++x - 8] = '\0';
-    if(strlen(fd->extention) > 0) {
-        strcpy(fd->fullFilename, fd->filename);
-        strcat(fd->fullFilename, ".");
-        strcat(fd->fullFilename, fd->extention);
-    } else {
-        strcpy(fd->fullFilename, fd->filename);
-    }
-    fd->firstCluster = buildClusterAddress(entry);
-	fd->size = entry->FileSize;
-	fd->mode = MODE_UNKNOWN;
-    if((entry->Attr & ATTR_DIRECTORY) == ATTR_DIRECTORY)
-        fd->dir = TRUE;
-    else
-        fd->dir = FALSE;
-    return fd;
-}*/
 
 
 /*
@@ -811,7 +726,8 @@ int writeFileEntry(char* fat_image, FAT32BootBlock* bs, DirectoryEntry * entry, 
 
         // ----------- ONLY ROOT FOR NOW ------
         //makeSpecialDirEntries(&dotEntry, &dotDotEntry, destinationCluster, environment.pwd_cluster);
-        makeSpecialDirEntries(&dotEntry, &dotDotEntry, destinationCluster, 2);
+        createEntry(&dotEntry, ".", "", TRUE, destinationCluster, 0);	
+		createEntry(&dotDotEntry, "..", "", TRUE, current_cluster, 0);	
 
         //seek to first spot in new dir cluster chin and write the '.' entry
         dataAddress = byteOffsetofDirectoryEntry(bs, destinationCluster, 0);
@@ -836,7 +752,7 @@ int mkdir(char* fat_image, FAT32BootBlock* bs, const char * dirName, const char 
     printf("\t\t*****************Before FAT_writeFatEntry *******************\n");
     FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, &FAT_EOC); //mark that its End of Cluster
     printf("\t\t*****************Before CreateEntry *******************\n");
-    createEntry(&newDirEntry, dirName, extention, TRUE, beginNewDirClusterChain, 0, FALSE, FALSE);
+    createEntry(&newDirEntry, dirName, extention, TRUE, beginNewDirClusterChain, 0);
     printf("\t\t*****************Before Write File Entry *******************\n");
 
     writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
@@ -854,7 +770,6 @@ int main(int argc,char* argv[])
     //char pwd[256];
 
  	//int path_index = 0;
-    uint32_t current_cluster;
     FAT32BootBlock bpb;
     
     if(argc==1)
@@ -904,14 +819,12 @@ int main(int argc,char* argv[])
 			if (current_cluster != bpb.bpb_rootcluster && strcmp(args, ".") != 0)
 				current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, "..");
 
-			printf("PATH[PATH_INDEX]: %s\n", PATH[PATH_INDEX]);
 
 			//printf("DirName: %s\n", cmd);
 			/*Part 3: ls DIRNAME*/
 
 		} else if ((strcmp(command, "cd") == 0)) {
 			current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, args);
-			printf("PATH[PATH_INDEX] cd : %s\n", PATH[PATH_INDEX]);
 
 			/*Part 4: cd DIRNAME*/
 
