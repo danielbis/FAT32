@@ -116,7 +116,7 @@ typedef struct
 int sectorsInDataRegion(FAT32BootBlock* bs);
 int countOfClusters(FAT32BootBlock* bs);
 uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs);
-int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal);
+int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t newFatVal);
 int createEntry(DirectoryEntry * entry,
 			const char * filename, 
 			const char * ext,
@@ -150,9 +150,7 @@ uint32_t root_dir_sector_count(FAT32BootBlock* bpb)
 uint32_t first_sector_of_cluster(FAT32BootBlock* bpb, uint32_t cluster_num)
 {
 	uint32_t first_data_sector = bpb->reserved_sectors + (bpb->number_of_fats * bpb->bpb_FATz32)+ root_dir_sector_count(bpb);
-	if (first_data_sector * 512 != 100400){
-		printf("FIRST DATA SECTOR WARNING: %d\n", first_data_sector);
-	}
+	
 	return (((cluster_num-2) * (bpb->sectors_per_cluster)) + first_data_sector)*512;
 }
 
@@ -490,15 +488,15 @@ uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs)
 }
 */
 
-int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t * newFatVal) 
+int FAT_writeFatEntry(char* fat_image, FAT32BootBlock* bs, uint32_t destinationCluster, uint32_t newFatVal) 
 {
     
     FILE* f = fopen(fat_image, "rb+");
 
     fseek(f, cluster_to_byte_address(bs, destinationCluster), 0);
-    fwrite(newFatVal, 4, 1, f);
+    fwrite(&newFatVal, 4, 1, f);
     fclose(f);
-    printf("FAT_writeEntry: wrote->%d to cluster %d", *newFatVal, destinationCluster);
+    printf("FAT_writeEntry: wrote->%d to cluster %d", newFatVal, destinationCluster);
     return 0;
 }
 
@@ -571,13 +569,13 @@ uint32_t getLastClusterInChain(char* fat_image,FAT32BootBlock * bs, uint32_t fir
         
 }
 
-uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t clusterChainMember) 
+uint32_t FAT_extendClusterChain(char* fat_image, FAT32BootBlock* bs,  uint32_t pwd_cluster) 
 {
     uint32_t firstFreeCluster = FAT_findFirstFreeCluster(fat_image, bs);
-	uint32_t lastClusterinChain = getLastClusterInChain(fat_image, bs, clusterChainMember);
+	// uint32_t lastClusterinChain = getLastClusterInChain(fat_image, bs, clusterChainMember);
     //printf("1stfree: %d ", environment.io_writeCluster);
-    FAT_writeFatEntry(fat_image, bs, lastClusterinChain, &firstFreeCluster);
-    FAT_writeFatEntry(fat_image,bs, firstFreeCluster, &FAT_EOC);
+    FAT_writeFatEntry(fat_image,bs, firstFreeCluster, FAT_EOC);
+    FAT_writeFatEntry(fat_image, bs, pwd_cluster, firstFreeCluster);
     return firstFreeCluster;
 }
 
@@ -685,7 +683,19 @@ int writeFileEntry(char* fat_image, FAT32BootBlock* bs, DirectoryEntry * entry, 
             fseek(f, dataAddress, 0);
             fwrite (entry , 1 , sizeof(DirectoryEntry) , f );
         } else {
-            freshCluster = FAT_extendClusterChain(fat_image,bs, destinationCluster);
+        	uint32_t temp_cluster = destinationCluster;
+        	uint32_t fat_entry = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, temp_cluster));
+        	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){ 
+				printf("END OF THE DIRECTORY. \n");
+			}
+        	while (fat_entry != 0x0FFFFFF8 && fat_entry != 0x0FFFFFFF)
+        	{
+        		printf("increment temp_cluster before extension\n");
+        		temp_cluster += 1;
+        		fat_entry = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, temp_cluster));
+        	}
+        	printf("EXTENDING DIR\n");
+            freshCluster = FAT_extendClusterChain(fat_image,bs, temp_cluster);
             dataAddress = FAT_findNextOpenEntry(fat_image,bs, freshCluster);
             fseek(f, dataAddress, 0);
             fwrite (entry , 1 , sizeof(DirectoryEntry) , f );
@@ -720,7 +730,7 @@ int mkdir(char* fat_image, FAT32BootBlock* bs, const char * dirName, const char 
     printf("\t\t*****************starting MKDIR *******************\n");
     uint32_t beginNewDirClusterChain = FAT_findFirstFreeCluster(fat_image, bs); // free cluster
     printf("\t\t*****************Before FAT_writeFatEntry *******************\n");
-    FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, &FAT_EOC); //mark that its End of Cluster
+    FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, FAT_EOC); //mark that its End of Cluster
     printf("\t\t*****************Before CreateEntry *******************\n");
     createEntry(&newDirEntry, dirName, extention, TRUE, beginNewDirClusterChain, 0);
     printf("\t\t*****************Before Write File Entry *******************\n");
@@ -731,8 +741,87 @@ int mkdir(char* fat_image, FAT32BootBlock* bs, const char * dirName, const char 
     writeFileEntry(fat_image, bs, &newDirEntry, beginNewDirClusterChain, TRUE);
    return 0;
 }
-// ================= KAKAREKO END ==================
 
+int create(char* fat_image, FAT32BootBlock* bs, const char* filename, const char* extension, uint32_t targetDirectoryCluster)
+{
+	
+	DirectoryEntry newDirEntry;
+
+	printf("\t\t*****************Before CreateEntry *******************\n");
+    createEntry(&newDirEntry, filename, extension, FALSE, targetDirectoryCluster, 0);
+    printf("\t\t*****************Before Write File Entry *******************\n");
+
+    writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
+
+    return 0;
+}
+
+int rm_dir(char* fat_image, FAT32BootBlock* bs, char* dirname)
+{
+
+	uint32_t pwd_cluster = ls(bs, fat_image, current_cluster, 1, 0, dirname);
+	DirectoryEntry dir_entry;
+	// check if dirname found and cd successful 
+	if (pwd_cluster != current_cluster)
+	{
+		uint32_t first_normal_file = first_sector_of_cluster(bs, pwd_cluster) + 64; // adding 128 bytes to skip long and short entries for . and ..
+		uint32_t first_sector_parent = first_sector_of_cluster(bs, current_cluster);
+		FILE *ptr_img;
+		ptr_img = fopen(fat_image, "rb+");
+		if (!ptr_img)
+		{
+			printf("Unable to open the file image.");
+			return 0;
+		}
+		
+
+		fseek(ptr_img, first_normal_file, SEEK_SET);
+		fread(&dir_entry, sizeof(DirectoryEntry), 1, ptr_img);
+
+		if (dir_entry.Name[0] != 0x00) // not empty dir abort
+		{
+			printf("NOT EMPTY DIR %s", dir_entry.Name);
+
+			fclose(ptr_img);
+			return -1;
+		}
+		else
+		{
+			// seek back to the beginning of the dir and wipe it clean
+			fseek(ptr_img, (first_normal_file - 128), SEEK_SET);
+			int i;
+			unsigned char zero = 0x00;
+			for (i = 0; i < 128; ++i){
+				fwrite(&zero, 1, 1, ptr_img);
+
+			}
+			FAT_writeFatEntry(fat_image, bs, pwd_cluster, 0x00);
+			uint32_t counter;
+			fseek(ptr_img, first_sector_parent, SEEK_SET);
+			for(counter = 0; counter*sizeof(DirectoryEntry) < bs->sector_size; counter ++){
+				fread(&dir_entry, sizeof(DirectoryEntry),1,ptr_img);
+				process_filenames(&dir_entry);
+				if (strcmp(dir_entry.Name, dirname) == 0)
+				{
+					fseek(ptr_img, -32, SEEK_CUR);
+					
+					for (i = 0; i < 32; ++i){
+						fwrite(&zero, 1, 1, ptr_img);
+
+					}
+					fclose(ptr_img);
+					return 1; //success
+				}
+
+			}
+		}
+		printf("In the else.");
+
+		return -1; // couldnt find the dirname
+	
+	}	
+	return -1; //couldnt find the dirname 
+}
 
 int main(int argc,char* argv[])
 {
@@ -802,8 +891,19 @@ int main(int argc,char* argv[])
 			printf("SIZE\n");
 			/*Part 5: size FILENAME*/
 
-		} else if ((strcmp(command, "creat") == 0)) {
-			printf("CREAT\n");
+		} else if ((strcmp(command, "create") == 0)) {
+			printf("CREATE\n");
+			if (strchr(args, '.') != NULL)
+			{
+				char* filename;
+				char* extension;
+				filename = strtok(args, ".");
+				extension = filename + strlen(filename) +1;
+				create(fat_image, &bpb, filename, extension, current_cluster);
+
+			}
+			else
+				create(fat_image, &bpb, args, NULL, current_cluster);
 			/*Part 6: creat FILENAME*/
 
 		} else if ((strcmp(command, "mkdir") == 0)) {
@@ -818,6 +918,8 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "rmdir") == 0)) {
 			printf("RMDIR\n");
+			int rm_ret = rm_dir(fat_image, &bpb, args);
+			printf("returned from rmdir %d\n", rm_ret);
 			/*Part 9: rmdir DIRNAME*/
 
 		} else if ((strcmp(command, "open") == 0)) {
