@@ -62,8 +62,7 @@ typedef struct
  * for PATH NULL represents first invalid element
  * PATH_INDEX represents the index of last element in both tables
  */
-uint32_t CLUSTER_PATH[128];  //stores cluster path for easy .. exec
-unsigned int PATH_INDEX;
+
 uint32_t current_cluster;
 
 
@@ -191,30 +190,27 @@ uint32_t look_up_fat(FAT32BootBlock* bpb, char* fat_image, uint32_t offset)
 	Gets rid of trailing whitespace in filenames and inserts dots 
 	before extensions.
 */
-void process_filenames(DirectoryEntry* dir_array, int length)
+void process_filenames(DirectoryEntry* dir_entry)
 {
-	int i = 0;
-	for (i=0; i < length; ++i)
-	{
-		if (dir_array[i].Attr == 0x10){
-			const char s[2] = " ";
-			char *token;
-			token = strtok(dir_array[i].Name, s);
-			strcpy(dir_array[i].Name, token);
-		}
-		else {
-			char *white_space = strstr(dir_array[i].Name," ");
-			if ((white_space) && isspace(*white_space) && isalpha(*(white_space+1))){
-				*white_space = '.';
-			}		uint16_t FstClusLO;     /* byte 26-27;  Low word of this entry's first cluster number.  */
-
-			white_space = strstr(dir_array[i].Name," ");
-			if ((white_space) && isspace(*white_space)){
-				*white_space = '\0';
-			}
-		}
-
+	
+	if (dir_entry->Attr == 0x10){
+		const char s[2] = " ";
+		char *token;
+		token = strtok(dir_entry->Name, s);
+		strcpy(dir_entry->Name, token);
 	}
+	else {
+		char *white_space = strstr(dir_entry->Name," ");
+		if ((white_space) && isspace(*white_space) && isalpha(*(white_space+1))){
+			*white_space = '.';
+		}		
+
+		white_space = strstr(dir_entry->Name," ");
+		if ((white_space) && isspace(*white_space)){
+			*white_space = '\0';
+		}
+	}
+
 }
 
 /*
@@ -222,7 +218,7 @@ void process_filenames(DirectoryEntry* dir_array, int length)
 	Iterate over a directory and read in its contents to the dir_array[16]
 	Calls process_filenames to normalize names (insert dots, get rid of garbage, whitespace etc)
 */
-void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image, DirectoryEntry* dir_array)
+/*void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_image, DirectoryEntry* dir_array)
 {
 	int counter;
 	int i = 0;
@@ -238,6 +234,7 @@ void populate_dir(FAT32BootBlock* bpb , uint32_t DirectoryAddress, char* fat_ima
 	fclose(ptr_img);
 	process_filenames(dir_array, 16);
 }
+*/
 
 /* description: pass in a entry and this properly formats the
  * "firstCluster" from the 2 byte segments in the file structure
@@ -294,8 +291,7 @@ void init_env(FAT32BootBlock * bpb, char* fat_image, uint32_t * current_cluster)
 	fread(bpb,sizeof(FAT32BootBlock),1,ptr_img);
 	fclose(ptr_img);
 	*current_cluster = bpb-> bpb_rootcluster;
-	CLUSTER_PATH[0] = bpb -> bpb_rootcluster;
-	CLUSTER_PATH[1] = 0; // 0 indicates invalid entry, end of the potential iteration
+	
 	//strcpy(pwd, "/");
 	/*int i;
 	for (i = 0; i < 128; ++i)
@@ -303,7 +299,6 @@ void init_env(FAT32BootBlock * bpb, char* fat_image, uint32_t * current_cluster)
 		PATH[i] = malloc(128 * sizeof(char));
 	}*/
 	//PATH[1] = NULL; // NULL indicates invalid entry, end of the potential iteration
-	PATH_INDEX = 0;
 
 }
 
@@ -360,10 +355,10 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 	DirectoryEntry dir_array[16];
 	DirectoryEntry de;
 	DirectoryEntry other;
-
 	// get the start of the actual content of the directory
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
-
+	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
+	uint32_t counter;
 	FILE *ptr_img;
 	ptr_img = fopen(fat_image, "r");
 	if (!ptr_img)
@@ -374,71 +369,55 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 	
 
 	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
-	fread(&de,sizeof(DirectoryEntry),1,ptr_img);
-	fclose(ptr_img);
-
-	// 
-	populate_dir(bpb, FirstSectorofCluster, fat_image, dir_array);
-	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
-
-
-	/* if cd is True and dirname != NULL
+	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++){
+		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+		process_filenames(&de);
+		/* if cd is True and dirname != NULL
 		try to match given dirname with fetched directory names
-	*/
-	if (cd == 1 && dirname){
-		int j;
-		for (j= 0; j < 16; ++j)
-		{
-			if (strcmp(dirname, "..") == 0 && strcmp(dir_array[j].Name, "..") == 0 && dir_array[j].Attr == 0x10){
-				CLUSTER_PATH[PATH_INDEX] = 0; // dummy element in place of current dir
-				PATH_INDEX -= 1; // go up in the path
-				return CLUSTER_PATH[PATH_INDEX]; //parent_cluster;
+		*/
+		if (cd == 1 && dirname){
+			if (strcmp(dirname, "..") == 0 && strcmp(de.Name, "..") == 0 && de.Attr == 0x10){
+				if (de.FstClusLO == 0 && de.FstClusHI == 0)
+					return 2;
+				else
+					return buildClusterAddress(&de);
 			}
-			else if (strcmp(dirname, ".") == 0 && strcmp(dir_array[j].Name, ".") == 0 && dir_array[j].Attr == 0x10){
+			else if (strcmp(dirname, ".") == 0 && strcmp(de.Name, ".") == 0 && de.Attr == 0x10){
 				return current_cluster;
 			}
-			else if (strcmp(dir_array[j].Name, dirname) == 0 && dir_array[j].Attr == 0x10){
-				PATH_INDEX += 1;
-				CLUSTER_PATH[PATH_INDEX] = buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
-				CLUSTER_PATH[PATH_INDEX+1] = 0; // dummy element
-				return buildClusterAddress(&dir_array[j]); // dir_array[j].FstClusLO;
-			}
+			else if (strcmp(de.Name, dirname) == 0 && de.Attr == 0x10){
+				return buildClusterAddress(&de); // dir_array[j].FstClusLO;
+			}	
 		}
-
-	}
-	/*  if size is True and dirname != NULL
+		/*  if size is True and dirname != NULL
 		try to match given dirname with fetched directory names
 		For now "A" is hardcoded, once we handle user inputs we will
 		compare to dirname
-	*/
-	else if(size == 1 && dirname)
-	{
-		int j;
-		for (j= 0; j < 16; ++j)
+		*/
+		else if(size == 1 && dirname)
 		{
-			if (strcmp(dir_array[j].Name, "A") == 0){
-				printf("%s\tsize:%d\n",dir_array[j].Name, dir_array[j].FileSize);
+			
+			if (strcmp(de.Name, dirname) == 0){
+				printf("%s\tsize:%d\n",de.Name, de.FileSize);
 			}
 
+			
 		}
-	}
-	else{ //cd and size false so we are dealing we normal ls, print the content of directory 
-		int j;
-		for (j= 0; j < 16; ++j)
-		{
-			if ((dir_array[j].Attr & 0x0F) <= 0 && strlen(dir_array[j].Name) > 0)
-				printf("%s\n",dir_array[j].Name);
-
-			//printf("%s\tsize:%d\n",dir_array[j].Name, dir_array[j].FileSize);
-
+		//cd and size false so we are dealing we normal ls, print the content of directory 
+		else{ 
+			if ((de.Attr & 0x0F) <= 0 && strlen(de.Name) > 0)
+				printf("Name %s\tLowAddr: %d\tHighAddr: %d\n",de.Name, de.FstClusLO, de.FstClusHI);
 		}
 	}
 
+	fclose(ptr_img);
+
+	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
 
 	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF){ 
 		printf("END OF THE DIRECTORY. \n");
 	}else{ // it is not the end of dir, call ls again with cluster_number returned from fat table
-		return ls(bpb, fat_image, fat_entry, 0,0, NULL); 
+		return ls(bpb, fat_image, fat_entry, cd, size, NULL); 
 	}
 
 
@@ -616,7 +595,7 @@ uint32_t getFileSizeInClusters(char* fat_image, FAT32BootBlock* bs, uint32_t fir
     uint32_t size = 1;
     firstClusterVal = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, firstClusterVal));
     //printf("\ngetFileSizeInClusters: %d    ", firstClusterVal);
-    while((firstClusterVal = (firstClusterVal & MASK_IGNORE_MSB)) < FAT_EOC) {
+    while(firstClusterVal != FAT_EOC) {
        
         size++;
         firstClusterVal = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, firstClusterVal));
