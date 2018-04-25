@@ -460,9 +460,9 @@ uint32_t FAT_findFirstFreeCluster(char* fat_image, FAT32BootBlock* bs)
 {
         FILE *fp = fopen(fat_image, "rb+"); 
 
-        int i = current_cluster;
-        int k;
-        int fatlookup = 1;
+        uint32_t i = current_cluster;
+        uint32_t k;
+        uint32_t fatlookup = 1;
 
         while(fatlookup != 0x00000000)
         {
@@ -525,31 +525,22 @@ int createEntry(DirectoryEntry * entry,
 	entry->LstAccDate = 0;
 	entry->WrtTime = 0;
 	entry->WrtDate = 0;
-
-    int x;
-    for(x = 0; x < MAX_FILENAME_SIZE; x++) {
-        if(x < strlen(filename))
-            entry->Name[x] = filename[x];
-        else
-            entry->Name[x] = ' ';
-    }
+	strcpy(entry->Name, filename);
+    //check for file extension
     if (ext)
     {
-    	for(x = 0; x < MAX_EXTENTION_SIZE; x++) {
-        if(x < strlen(ext))
-            entry->Name[MAX_FILENAME_SIZE + x] = ext[x];
-        else
-            entry->Name[MAX_FILENAME_SIZE + x] = ' ';
-    	}
+    	strcat(entry->Name, " ");
+    	strcat(entry->Name, ext);
     }
     
 
-    //decompose address
+    //  decompose address
     entry->FstClusLO = firstCluster;
 	entry->FstClusHI = firstCluster >> 16;  
 	// entry->FstClusLO = current_cluster/0x100;
 	// entry->FstClusHI = current_cluster % 0x100;
 
+	//  check if directory and set attributes
     if(isDir == TRUE) {
         entry->FileSize = 0;
         entry->Attr = ATTR_DIRECTORY;
@@ -557,7 +548,7 @@ int createEntry(DirectoryEntry * entry,
         entry->FileSize = filesize;
         entry->Attr = ATTR_ARCHIVE;
 	}
-    return 0; //stops execution so we don't flow out into empty entry config code below
+    return 0; 
 }
 
 
@@ -653,14 +644,14 @@ uint32_t FAT_findNextOpenEntry(char* fat_image, FAT32BootBlock* bs, uint32_t pwd
 	DirectoryEntry dir;
     FILEDESCRIPTOR fd;
 
-    uint32_t dirSizeInCluster = getFileSizeInClusters(fat_image, bs, pwdCluster);
+    //uint32_t dirSizeInCluster = getFileSizeInClusters(fat_image, bs, pwdCluster);
     //printf("dir Size: %d\n", dirSizeInCluster);
     uint32_t clusterCount;
     char fileName[12];
-    uint32_t offset;
+    uint32_t offset = 0;
     uint32_t increment = 2;
     //each dir is a cluster
-    for(clusterCount = 0; clusterCount < dirSizeInCluster; clusterCount++) 
+    for(clusterCount = 0; clusterCount * sizeof(DirectoryEntry) < bs->sector_size; clusterCount++) 
     {
         for(; offset < ENTRIES_PER_SECTOR; offset += increment) 
         {
