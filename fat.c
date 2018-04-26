@@ -111,6 +111,12 @@ typedef struct
 		uint32_t FileSize;      /* byte 28 - 31; 32bit DWORD holding this file's size in bytes */
 }__attribute((packed)) DirectoryEntry;
 
+//Struct for open files
+typedef struct openFile
+{
+    int file_first_cluster_number;
+    short mode;
+}openFile;
 
 /*These need to be redone, basically copied to get working prototype */// //////////////////////////////////////////////////
 int sectorsInDataRegion(FAT32BootBlock* bs);
@@ -376,14 +382,23 @@ uint32_t ls(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, int 
 		if (cd == 1 && dirname){
 			if (strcmp(dirname, "..") == 0 && strcmp(de.Name, "..") == 0 && de.Attr == 0x10){
 				if (de.FstClusLO == 0 && de.FstClusHI == 0)
+                {
+                    fclose(ptr_img);
 					return 2;
+                }
 				else
+                {
+                    fclose(ptr_img);
 					return buildClusterAddress(&de);
+                }
 			}
 			else if (strcmp(dirname, ".") == 0 && strcmp(de.Name, ".") == 0 && de.Attr == 0x10){
+                fclose(ptr_img);
 				return current_cluster;
 			}
-			else if (strcmp(de.Name, dirname) == 0 && de.Attr == 0x10){
+			else if (strcmp(de.Name, dirname) == 0 && de.Attr == 0x10)
+            {
+                fclose(ptr_img);
 				return buildClusterAddress(&de); // dir_array[j].FstClusLO;
 			}	
 		}
@@ -823,10 +838,88 @@ int rm_dir(char* fat_image, FAT32BootBlock* bs, char* dirname)
 	return -1; //couldnt find the dirname 
 }
 
+int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * args, openFile * array, int * arrLen)
+{
+	DirectoryEntry de;
+	DirectoryEntry other;
+	// get the start of the actual content of the directory
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
+	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
+	uint32_t counter;
+	FILE *ptr_img;
+    char * filename = args;
+    int mode = 0;
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.");
+		return 0;
+	}
+	
+
+	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++){
+		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+		process_filenames(&de);
+		if (strcmp(de.Name, filename) == 0)
+        {
+			if (de.Attr != 0x10)
+            {
+                //Invalid mode for the file
+                if ((mode == MODE_WRITE || mode == MODE_READ) && de.Attr == ATTR_READ_ONLY)
+                {
+                    fclose(ptr_img);
+                    return 2;
+                }
+                
+                else
+                {
+                    uint32_t FirstClusterNum = buildClusterAddress(&de);
+                    int i;
+                    for(i = 0; i < *arrLen; i++)
+                    {
+                        //File is already open
+                        if (array[i].file_first_cluster_number == FirstClusterNum)
+                        {
+                            fclose(ptr_img);
+                            return 3;
+                        }
+                    }
+                    
+                    struct openFile newFile;
+                    newFile.file_first_cluster_number = FirstClusterNum;
+                    newFile.mode = mode;
+                    array[*arrLen] = newFile;
+                    *arrLen+=1;
+                    fclose(ptr_img);
+                    printf("Successful open of file with first cluster number:%d\n", FirstClusterNum);
+                    /*for (i=0; i < *arrLen; i++)
+                        printf("%d\n", array[i].file_first_cluster_number);*/
+                    return -1;
+                }
+            }
+            
+            //Cant open a directory
+            else
+            {
+                fclose(ptr_img); 
+                return 1;
+            }
+		}
+	}
+
+	fclose(ptr_img);
+    //File not found in current directory
+    return 4;
+}
+
 int main(int argc,char* argv[])
 {
     char fat_image[256];
     //char pwd[256];
+    struct openFile openFilesArray[2048];
+    int * arr_length;
+    *arr_length = 0;
 
  	//int path_index = 0;
     FAT32BootBlock bpb;
@@ -924,6 +1017,9 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "open") == 0)) {
 			printf("OPEN\n");
+            if (open_filename(&bpb, fat_image, current_cluster, args, openFilesArray, arr_length) != -1)
+                printf("Fail, %d\n", open_filename(&bpb, fat_image, current_cluster, args, openFilesArray, arr_length));
+            //printf("%s\n", args);
 			/*Part 10: open FILENAMEMODE*/
 
 		} else if ((strcmp(command, "close") == 0)) {
