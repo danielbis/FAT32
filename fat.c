@@ -41,20 +41,6 @@ const uint8_t ATTR_LONG_NAME = 0x0F;
 uint32_t FAT_FREE_CLUSTER = 0x00000000;
 uint32_t FAT_EOC = 0x0FFFFFF8;
 
-
-typedef struct 
-{
-    uint8_t filename[9];
-    uint8_t extention[4];
-    char parent[100];
-    uint32_t firstCluster;
-    int mode;
-    uint32_t size;
-    bool dir; //is it a directory
-    bool isOpen;
-    uint8_t fullFilename[13];
-} __attribute((packed)) FILEDESCRIPTOR;
-
 /*
  * Arrays storing our current position in the file
  * for clusters 0 represents first invalid element
@@ -587,10 +573,7 @@ uint32_t byteOffsetofDirectoryEntry(FAT32BootBlock* bs, uint32_t clusterNum, int
 */
 uint32_t dataSector_NextOpen(char* fat_image, FAT32BootBlock* bs, uint32_t pwdCluster) 
 {
-    // struct DIR_ENTRY dir;
-    // struct FILEDESCRIPTOR fd;
 	DirectoryEntry dir;
-    FILEDESCRIPTOR fd;
 
     //printf("dir Size: %d\n", dirSizeInCluster);
     uint32_t clusterCount;
@@ -903,7 +886,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
     }
     else
     {
-        printf("%s is an invalid mode. Valid modes are \"r\", \"w\", \"rw\" or \"wr\"\n", mode_str);
+        printf("\"%s\" is an invalid mode. Valid modes are \"r\", \"w\", \"rw\" or \"wr\"\n", mode_str);
         return 5;
     }
 	ptr_img = fopen(fat_image, "r");
@@ -926,7 +909,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
                 if ((mode == MODE_WRITE || mode == MODE_BOTH) && de.Attr == ATTR_READ_ONLY)
                 {
                     fclose(ptr_img);
-                    printf("Unable to open a READ_ONLY file in %s mode\n", mode_str);
+                    printf("Unable to open a READ_ONLY file in \"%s\" mode\n", mode_str);
                     return 2;
                 }
                 
@@ -940,7 +923,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
                         if (array[i].file_first_cluster_number == FirstClusterNum)
                         {
                             fclose(ptr_img);
-                            printf("File with first cluster number: %d is already open\n", FirstClusterNum);
+                            printf("File: \"%s\" is already open\n", filename);
                             return 3;
                         }
                     }
@@ -952,7 +935,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
                     array[*arrLen] = newFile;
                     *arrLen+=1;
                     fclose(ptr_img);
-                    printf("Successful open of file with first cluster number:%d in mode:%s\n", FirstClusterNum, mode_str);
+                    //printf("Successful open of file with first cluster number:%d in mode:%s\n", FirstClusterNum, mode_str);
                     /*for (i=0; i < *arrLen; i++)
                         printf("%d\n", array[i].file_first_cluster_number);*/
                     return -1;
@@ -963,7 +946,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
             else
             {
                 fclose(ptr_img);
-                printf("Unable to open a directory\n");
+                printf("File: \"%s\" is a directory\n");
                 return 1;
             }
 		}
@@ -975,7 +958,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
 	{ 
 		fclose(ptr_img);
         //File not found in current directory
-        printf("Unable to find a file named %s in the current directory\n", filename);
+        printf("File: \"%s\" does not exist\n", filename);
         return 4;
 	}
     else
@@ -1028,14 +1011,14 @@ int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluste
             {
                 fclose(ptr_img);
                 *arrLen -= 1;
-                printf("Successfully removed file with name:%s and first cluster number: %d\n", filename, FirstClusterNum);
+                //printf("Successfully removed file with name:%s and first cluster number: %d\n", filename, FirstClusterNum);
                 return -1;
             }
             
             else
             {
                 fclose(ptr_img);
-                printf("File with name:%s and first cluster number: %d is not open\n", filename, FirstClusterNum);
+                printf("File: \"%s\" is not open\n", filename);
                 return 1;
             }
         }
@@ -1046,7 +1029,7 @@ int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluste
 	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
 	{ 
 		fclose(ptr_img);
-        printf("Unable to locate file with name: %s in current directory\n", filename);
+        printf("File: \"%s\" was not found in the current directory\n", filename);
         return 2;
 	}
     else
