@@ -838,7 +838,7 @@ int rm_dir(char* fat_image, FAT32BootBlock* bs, char* dirname)
 	return -1; //couldnt find the dirname 
 }
 
-int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * args, openFile * array, int * arrLen)
+int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, char * mode_str, openFile * array, int * arrLen)
 {
 	DirectoryEntry de;
 	DirectoryEntry other;
@@ -847,8 +847,24 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
 	uint32_t counter;
 	FILE *ptr_img;
-    char * filename = args;
-    int mode = 0;
+    int mode;
+    if (strcmp(mode_str, "r") == 0)
+    {
+        mode = MODE_READ;
+    }
+    else if (strcmp(mode_str, "w") == 0)
+    {
+        mode = MODE_WRITE;
+    }
+    else if(strcmp(mode_str, "rw") == 0 || strcmp(mode_str, "wr") == 0)
+    {
+        mode = MODE_BOTH;
+    }
+    else
+    {
+        printf("%s is an invalid mode. Valid modes are \"r\", \"w\", \"rw\" or \"wr\"\n", mode_str);
+        return 5;
+    }
 	ptr_img = fopen(fat_image, "r");
 	if (!ptr_img)
 	{
@@ -866,9 +882,10 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
 			if (de.Attr != 0x10)
             {
                 //Invalid mode for the file
-                if ((mode == MODE_WRITE || mode == MODE_READ) && de.Attr == ATTR_READ_ONLY)
+                if ((mode == MODE_WRITE || mode == MODE_BOTH) && de.Attr == ATTR_READ_ONLY)
                 {
                     fclose(ptr_img);
+                    printf("Unable to open a READ_ONLY file in %s mode\n", mode_str);
                     return 2;
                 }
                 
@@ -882,6 +899,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
                         if (array[i].file_first_cluster_number == FirstClusterNum)
                         {
                             fclose(ptr_img);
+                            printf("File with first cluster number: %d is already open\n", FirstClusterNum);
                             return 3;
                         }
                     }
@@ -892,7 +910,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
                     array[*arrLen] = newFile;
                     *arrLen+=1;
                     fclose(ptr_img);
-                    printf("Successful open of file with first cluster number:%d\n", FirstClusterNum);
+                    printf("Successful open of file with first cluster number:%d in mode:%s\n", FirstClusterNum, mode_str);
                     /*for (i=0; i < *arrLen; i++)
                         printf("%d\n", array[i].file_first_cluster_number);*/
                     return -1;
@@ -902,7 +920,8 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
             //Cant open a directory
             else
             {
-                fclose(ptr_img); 
+                fclose(ptr_img);
+                printf("Unable to open a directory\n");
                 return 1;
             }
 		}
@@ -910,6 +929,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
 
 	fclose(ptr_img);
     //File not found in current directory
+    printf("Unable to find a file named %s in the current directory\n", filename);
     return 4;
 }
 
@@ -1017,9 +1037,11 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "open") == 0)) {
 			printf("OPEN\n");
-            if (open_filename(&bpb, fat_image, current_cluster, args, openFilesArray, arr_length) != -1)
-                printf("Fail, %d\n", open_filename(&bpb, fat_image, current_cluster, args, openFilesArray, arr_length));
-            //printf("%s\n", args);
+            char* filename;
+			char* mode;
+			filename = strtok(args, " ");
+			mode = filename + strlen(filename) +1;
+            open_filename(&bpb, fat_image, current_cluster, filename, mode, openFilesArray, arr_length);
 			/*Part 10: open FILENAMEMODE*/
 
 		} else if ((strcmp(command, "close") == 0)) {
