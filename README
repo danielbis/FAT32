@@ -4,9 +4,9 @@ Mark Thomas mtw14@my.fsu.edu
 
 Project 3: Specification FAT32 File System
 
-The folder contains the the file fat.c, which is the implementation of the project 3. The folder includes the makefile and the executable can be build by the make command.
+The folder contains the the file fat.c, which is the implementation of the project 3. The folder includes the makefile and the executable can be built using the make command. The executable will be named "fat".
 
-The following functions were implemented. Below we list the performed test cases for each functions:
+The following functions were implemented. Below is a list of the performed test cases for each functions:
 
 Part 1: exit 
 exit
@@ -22,8 +22,8 @@ cd BLUE
 Part 5: size FILENAME
 size A
 size B
-Part 6: creat FILENAME
-creat A
+Part 6: create FILENAME
+create A
 Part 7: mkdir DIRNAME
 mkdir PROJ3
 Part 8: rm FILENAME
@@ -31,6 +31,10 @@ rm A
 Part 9: rmdir DIRNAME
 rmdir PROJ3
 Part 10: open FILENAMEMODE
+open A rw
 Part 11: close FILENAME
-Part 12: read FILENAME OFFSETSIZE 
+close A
+Part 12: read FILENAME OFFSET SIZE
+read A 0 32
 Part 13: write FILENAME OFFSET SIZE STRING
+write A 0 32 "test12"
