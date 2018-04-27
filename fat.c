@@ -1475,6 +1475,7 @@ int main(int argc,char* argv[])
     char cmd[MAXCHAR];
 	char* command = NULL;
 	do {
+		printf("FAT32Mounter >> ");
 		fgets(cmd, sizeof(cmd), stdin);
 		char * args;
 		command = strtok(command, "\n"); // get rid of \n from fgets
@@ -1503,12 +1504,17 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "ls") == 0)) {
 
-			current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, args);
+			if (!args){
+				char * dot = ".";
+				current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, dot);
+			}
+			else
+				current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, args);
 			// do ls
 			ls(&bpb, fat_image, current_cluster, 0, 0, NULL);
 
 			// cd back if we are not in the root
-			if (current_cluster != bpb.bpb_rootcluster && strcmp(args, ".") != 0)
+			if (args != NULL && current_cluster != bpb.bpb_rootcluster && strcmp(args, ".") != 0)
 				current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, "..");
 		
 		} else if ((strcmp(command, "cd") == 0)) 
