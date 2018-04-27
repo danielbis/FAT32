@@ -720,7 +720,6 @@ int writeFileEntry(char* fat_image, FAT32BootBlock* bs, DirectoryEntry * entry, 
         DirectoryEntry dotEntry;
         DirectoryEntry dotDotEntry;
 
-        // ----------- ONLY ROOT FOR NOW ------
         //makeSpecialDirEntries(&dotEntry, &dotDotEntry, destinationCluster, environment.pwd_cluster);
         createEntry(&dotEntry, ".", "", TRUE, destinationCluster, 0);	
 		createEntry(&dotDotEntry, "..", "", TRUE, current_cluster, 0);	
@@ -761,8 +760,10 @@ int create(char* fat_image, FAT32BootBlock* bs, const char* filename, const char
 {
 	
 	DirectoryEntry newDirEntry;
+	uint32_t beginNewDirClusterChain = FAT_findFirstFreeCluster(fat_image, bs); // free cluster
+	FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, FAT_EOC); //mark that its End of Cluster
 
-    createEntry(&newDirEntry, filename, extension, FALSE, targetDirectoryCluster, 0);
+    createEntry(&newDirEntry, filename, extension, FALSE, beginNewDirClusterChain, 0);
 
     writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
 
@@ -1172,7 +1173,7 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 
 	uint32_t bytes_offset = offset % bs -> sector_size;
 	uint32_t cluster_size = bs -> sector_size * bs -> sectors_per_cluster;
-	
+
 
 	uint32_t clusters_to_read = (uint32_t)(cluster_size / size) + (cluster_size % size);
 
@@ -1185,9 +1186,11 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 	{
 		cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
 		cluster_offset -= 1;
+
 		if (cluster_number == 0x0000000 || cluster_number == 0xFFFFFFF8)
 		{
 			printf("Error, broken cluster chain.\n");
+			free(data);
 			return -1; // error
 		}
 	}
@@ -1197,43 +1200,54 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 	if (!ptr_img)
 	{
 		printf("Unable to open the file image.");
+		fclose(ptr_img);
+		free(data);
 		return -1; // error
 	}
 	
 	
 	//char temp[2];
 	uint32_t cluster_pos = bytes_offset;
-	while (bytes_to_read != 0)
+	while (bytes_to_read > 0)
 	{
-		fseek(ptr_img, (first_sector_of_cluster(bs, cluster_number) + bytes_offset), SEEK_SET);	
-		for (; bytes_to_read > 0; )
-		{
-			if (cluster_pos == cluster_size)
+		if (bytes_offset == cluster_size){
+			cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
+			bytes_offset = 0;
+			if (cluster_number == 0x0FFFFFF8 || cluster_number == 0x0FFFFFFF)
+			{ 
 				break;
+			}
+		}
+
+		fseek(ptr_img, (first_sector_of_cluster(bs, cluster_number) + bytes_offset), SEEK_SET);	
+		
 			//fread(data, sizeof(char), 1, ptr_img);
 			//data[1] = '\0';
-
-			if (cluster_size - offset > bytes_to_read){
-				fread(data, bytes_to_read, 1, ptr_img);
-				data[bytes_to_read] = '\0';
-				bytes_to_read -= bytes_to_read;
-			}
-			else{
-				data[cluster_size - offset] = '\0';
-
-				fread(data, cluster_size - offset, 1, ptr_img);
-				bytes_to_read -= (cluster_size - offset);
-			}
-			printf("%s", data);
+		
+		if (cluster_size - bytes_offset >= bytes_to_read){
+			fread(data, bytes_to_read, 1, ptr_img);
+			data[bytes_to_read] = '\0';
+			bytes_to_read -= bytes_to_read;
 		}
+		else{
+			fread(data, cluster_size - bytes_offset, 1, ptr_img);
+			bytes_to_read -= (cluster_size - bytes_offset);
+			data[cluster_size - bytes_offset] = '\0';
+
+		}
+		printf("%s", data);
+		
 		cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
 		bytes_offset = 0;
 
 	}
+	fclose(ptr_img);
+	free(data);
 
 
 	return 0;
 }
+
 
 /* Returns cluster number for the filename in the current cluster*/
 uint32_t cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename,uint32_t pwd_cluster_num)
@@ -1247,10 +1261,8 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •Make sure to check that FILENAME is OPEN in WR_ONLY or RD_WR mode
 •However, there are a bunch of edge cases that can happen:
 */
-	DirectoryEntry de;
-	//pwd_cluster_num=current_cluster;
 	// get the start of the actual content of the directory
-
+	DirectoryEntry de;
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
 	
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
@@ -1303,10 +1315,9 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •Make sure to check that FILENAME is OPEN in WR_ONLY or RD_WR mode
 •However, there are a bunch of edge cases that can happen:
 */
-	DirectoryEntry de;
-	//pwd_cluster_num=current_cluster;
+	
 	// get the start of the actual content of the directory
-
+	DirectoryEntry de;
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
 
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
@@ -1344,8 +1355,6 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 	}else
 	{ // it is not the end of dir, call ls again with cluster_number returned from fat table
 		//pwd_cluster_num = fat_entry;
-		printf("Seg fault, fat entry: %d\n", fat_entry);
-
 		return cluster_number_where_is_file(bpb, fat_image, filename,fat_entry); 
 	}
 
@@ -1353,7 +1362,7 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 }
 
 
-int write_file(FAT32BootBlock* bpb, char* fat_image, char * filename, uint32_t offset, uint32_t size,char * string)
+int write_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int open_files_count, char * filename, uint32_t offset, uint32_t size,char * string)
 {// (FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
 /*write FILENAME OFFSET SIZE STRING*/
 /*
@@ -1364,35 +1373,150 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •Make sure to check that FILENAME is OPEN in WR_ONLY or RD_WR mode
 •However, there are a bunch of edge cases that can happen:
 */
-	DirectoryEntry de;
-	// get the start of the actual content of the directory
-	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
-	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
-	uint32_t counter;
+
+	// Check if file in directory
+	uint32_t first_cluster = cluster_number(bs, fat_image, filename, current_cluster);
+	int i;
+	int found = 0;
+	for (i= 0; i < open_files_count; ++i)
+	{
+		if (open_files[i].file_first_cluster_number == first_cluster){
+			found = 1;
+			break;
+		}
+	}
+	if (found == 0){
+		printf("File is not open.\n");
+		return -1;
+	}
+
+	if (offset > open_files[i].FileSize)
+	{
+		printf("Offset larger then file size.\n");
+		return -1; // error 
+	}
 	FILE *ptr_img;
     
-	ptr_img = fopen(fat_image, "r");
+	ptr_img = fopen(fat_image, "rb+");
 	if (!ptr_img)
 	{
 		printf("Unable to open the file image.\n");
-		return 0;
+		return -1;
 	}
 	
-	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
-	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++)
+	if (offset + size > open_files[i].FileSize)
 	{
-		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
-		process_filenames(&de);
-		printf("%s\n", de.Name);
-		if (strcmp(de.Name, filename) == 0)
-        {
-        	printf("Write to this file: %s\n", de.Name);
+		DirectoryEntry de;
 
-        }
-    }
+		uint32_t file_entry_cluster = cluster_number_where_is_file(bs, fat_image, filename, current_cluster);
+		uint32_t FirstSectorofCluster = first_sector_of_cluster(bs, file_entry_cluster);
+		uint32_t counter;
+		uint32_t new_size = offset + size;
+		fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+		for(counter = 0; counter*sizeof(DirectoryEntry) < bs->sector_size; counter ++)
+		{
+			fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+			process_filenames(&de);
+			if (strcmp(de.Name, filename) == 0) // Add flag for files
+	        {	        	
+				//fseek(ptr_img, -sizeof(DirectoryEntry), SEEK_CUR);
+				fseek(ptr_img, -4, SEEK_CUR);
+				fwrite(&new_size, 4, 1, ptr_img);
+				open_files[i].FileSize = new_size;
+
+	        	break;
+
+	        }
+	    }
+	}
+
+	char* data = malloc(size);
+
+	if (size > strlen(string))
+	{
+		memcpy(data, string, strlen(string));
+		for (i = strlen(string) + 1; i < size; ++i)
+			data[i] = '\0';
+	}
+	else if (strlen(string) > size)
+	{
+		memcpy(data, string, size);
+	}
+	else{
+		strcpy(data, string);
+	}
+
+	data[size] = '\0';
+
+
+	uint32_t cluster_number = first_cluster; //buildClusterAddress(target_file);
+	uint32_t cluster_offset = offset / bs -> sector_size;
+
+	uint32_t bytes_offset = offset % bs -> sector_size;
+	uint32_t cluster_size = bs -> sector_size * bs -> sectors_per_cluster;
+	
+
+	uint32_t clusters_to_read = (uint32_t)(cluster_size / size) + (cluster_size % size);
+
+	uint32_t bytes_to_write = size;
+	uint32_t file_bytes_to_end = open_files[i].FileSize - offset;
+
+	uint32_t cluster_no_copy = cluster_number;
+
+	while (cluster_offset != 0)
+	{
+		cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
+		cluster_offset -= 1;
+		if (cluster_number == 0x0000000 || cluster_number == 0xFFFFFFF8)
+		{
+			printf("Error, broken cluster chain.\n");
+			fclose(ptr_img);
+			free(data);
+			return -1; // error
+		}
+	}
+
+
+	//DirectoryEntry de;
+	// get the start of the actual content of the directory
+	// uint32_t FirstSectorofCluster = first_sector_of_cluster(bs, cluster_number);
+	// uint32_t file_size_clusters = getFileSizeInClusters(fat_image, bs, FirstSectorofCluster);
+	// uint32_t counter;
+	
+	int bytes_written = 0;
+	while (bytes_to_write > 0)
+	{
+		fseek(ptr_img, (first_sector_of_cluster(bs, cluster_number) + bytes_offset), SEEK_SET);	
+		
+		/*if (bytes_offset == cluster_size)
+			break;*/
+		//fread(data, sizeof(char), 1, ptr_img);
+		//data[1] = '\0';
+
+		if (cluster_size - offset > bytes_to_write){
+			fwrite(&data[bytes_written], bytes_to_write, 1, ptr_img);
+			bytes_to_write -= bytes_to_write;
+			bytes_written += bytes_to_write;
+		}
+		else{
+			fwrite(&data[bytes_written], cluster_size - offset, 1, ptr_img);
+			bytes_to_write -= (cluster_size - offset);
+			bytes_written += (cluster_size - offset);
+		}
+		
+		// zero-out the offset after the first loop
+		bytes_offset = 0;
+
+		cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
+		if ((cluster_number == 0x0FFFFFF8 || cluster_number == 0x0FFFFFFF) && bytes_to_write > 0){
+			cluster_number = FAT_extendClusterChain(fat_image, bs, cluster_no_copy);
+		}
+		cluster_no_copy = cluster_number;
+
+	}
     fclose(ptr_img);
 
-
+    free(data);
 	return 0;
 }
 
@@ -1535,19 +1659,23 @@ int main(int argc,char* argv[])
 			int read_size = atoi(size_c); 
 
 			read_file(fat_image, &bpb, openFilesArray, arr_length,filename, offset, read_size);
+
 			/*Part 12: read FILENAMEOFFSETSIZE*/
 
 		} else if ((strcmp(command, "write") == 0)) {
 			printf("WRITE\n");
 			/*Part 13: write FILENAMEOFFSETSIZESTRING*/
-			char * filename = "A";
-			uint32_t offset = 12;
-			uint32_t size = 16;
-			char * string = "aaa";
-			uint32_t pwd_cluster_num = 0;
-			//write_file(&bpb, fat_image, filename, offset, size,string);
-			int cluster =  cluster_number(&bpb, fat_image, filename,pwd_cluster_num);
-			printf("cluster num to write: %d\n", cluster);
+			char * filename = strtok(args, " ");
+			char* offset_c = strtok(NULL, " ");
+			char* size_c = strtok(NULL, " ");
+			char * string = size_c + strlen(size_c) + 1;
+			int offset = atoi(offset_c);
+			int size = atoi(size_c);
+			//uint32_t pwd_cluster_num = 0;
+			write_file(fat_image,&bpb,  openFilesArray, arr_length, filename, (uint32_t)offset, (uint32_t)size,string);
+			
+
+			//int write_ret =  write_file(fat_image,&bpb, openFilesArray, arr_length,filename,pwd_cluster_num);
 
 		} else {
 			printf("UNKNOWN COMMAND\n");
