@@ -1120,7 +1120,7 @@ int read_file(char* fat_image, FAT32BootBlock* bs, char* filename, uint32_t offs
 }
 
 /* Returns cluster number for the filename in the current cluster*/
-int cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename)
+int cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename,uint32_t pwd_cluster_num)
 {// (FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
 /*write FILENAME OFFSET SIZE STRING*/
 /*
@@ -1132,8 +1132,9 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •However, there are a bunch of edge cases that can happen:
 */
 	DirectoryEntry de;
+	pwd_cluster_num=current_cluster;
 	// get the start of the actual content of the directory
-	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
 	uint32_t counter;
 	FILE *ptr_img;
@@ -1154,13 +1155,13 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 		if (strcmp(de.Name, filename) == 0)
         {
         	printf("Write to this file: %s\n", de.Name);
-        	return current_cluster;
+        	return pwd_cluster_num;
 
         }
     }
     fclose(ptr_img);
 
-	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
+	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,pwd_cluster_num));
 
 	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
 	{ 
@@ -1168,8 +1169,8 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 		return -1;
 	}else
 	{ // it is not the end of dir, call ls again with cluster_number returned from fat table
-		current_cluster = fat_entry;
-		return cluster_number(bpb, fat_image, filename); 
+		pwd_cluster_num = fat_entry;
+		return cluster_number(bpb, fat_image, filename,pwd_cluster_num); 
 	}
 
 	return 0;
@@ -1350,8 +1351,9 @@ int main(int argc,char* argv[])
 			uint32_t offset = 12;
 			uint32_t size = 16;
 			char * string = "aaa";
+			uint32_t pwd_cluster_num = 0;
 			//write_file(&bpb, fat_image, filename, offset, size,string);
-			int cluster =  cluster_number(&bpb, fat_image, filename);
+			int cluster =  cluster_number(&bpb, fat_image, filename,pwd_cluster_num);
 			printf("cluster num to write: %d\n", cluster);
 
 		} else {
