@@ -839,8 +839,9 @@ int rm_dir(char* fat_image, FAT32BootBlock* bs, char* dirname)
 
 int rm(char* fat_image, FAT32BootBlock* bs, char* filename)
 {
-	int pwd_cluster_num = 0;
+	int pwd_cluster_num = current_cluster;
 	int clust_loc = cluster_number_where_is_file(bs, fat_image, filename,pwd_cluster_num);
+	printf("the cluster cluster: %d\n", current_cluster);
 	printf("the cluster number: %d\n", clust_loc);
 	if(clust_loc == -1)
 	{
@@ -1247,9 +1248,11 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •However, there are a bunch of edge cases that can happen:
 */
 	DirectoryEntry de;
-	pwd_cluster_num=current_cluster;
+	//pwd_cluster_num=current_cluster;
 	// get the start of the actual content of the directory
+
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
+	
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
 	uint32_t counter;
 	FILE *ptr_img;
@@ -1301,9 +1304,11 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •However, there are a bunch of edge cases that can happen:
 */
 	DirectoryEntry de;
-	pwd_cluster_num=current_cluster;
+	//pwd_cluster_num=current_cluster;
 	// get the start of the actual content of the directory
+
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
+
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
 	uint32_t counter;
 	FILE *ptr_img;
@@ -1339,7 +1344,9 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 	}else
 	{ // it is not the end of dir, call ls again with cluster_number returned from fat table
 		//pwd_cluster_num = fat_entry;
-		return cluster_number(bpb, fat_image, filename,fat_entry); 
+		printf("Seg fault, fat entry: %d\n", fat_entry);
+
+		return cluster_number_where_is_file(bpb, fat_image, filename,fat_entry); 
 	}
 
 	return 0;
