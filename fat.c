@@ -985,11 +985,21 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
             }
 		}
 	}
+    
+    uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
 
-	fclose(ptr_img);
-    //File not found in current directory
-    printf("Unable to find a file named %s in the current directory\n", filename);
-    return 4;
+	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
+	{ 
+		fclose(ptr_img);
+        //File not found in current directory
+        printf("Unable to find a file named %s in the current directory\n", filename);
+        return 4;
+	}
+    else
+	{ // not the end of dir
+        fclose(ptr_img);
+		return open_filename(bpb, fat_image, fat_entry, filename, mode_str, array, arrLen); 
+	}
 }
 
 int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
@@ -1046,10 +1056,20 @@ int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluste
             }
         }
     }
-    
-    fclose(ptr_img);
-    printf("Unable to locate file with name: %s in current directory\n", filename);
-    return 2;
+
+    uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
+
+	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
+	{ 
+		fclose(ptr_img);
+        printf("Unable to locate file with name: %s in current directory\n", filename);
+        return 2;
+	}
+    else
+	{ // not the end of dir
+        fclose(ptr_img);
+		return close_filename(bpb, fat_image, fat_entry, filename, array, arrLen); 
+	}
 }
 /*
 	fat_image is the image path
