@@ -841,7 +841,6 @@ int rm_dir(char* fat_image, FAT32BootBlock* bs, char* dirname)
 int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, char * mode_str, openFile * array, int * arrLen)
 {
 	DirectoryEntry de;
-	DirectoryEntry other;
 	// get the start of the actual content of the directory
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
@@ -868,7 +867,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
 	ptr_img = fopen(fat_image, "r");
 	if (!ptr_img)
 	{
-		printf("Unable to open the file image.");
+		printf("Unable to open the file image.\n");
 		return 0;
 	}
 	
@@ -931,6 +930,66 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
     //File not found in current directory
     printf("Unable to find a file named %s in the current directory\n", filename);
     return 4;
+}
+
+int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int * arrLen)
+{
+    DirectoryEntry de;
+	// get the start of the actual content of the directory
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
+	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
+	uint32_t counter;
+	FILE *ptr_img;
+    
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.\n");
+		return 0;
+	}
+	
+	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++){
+		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+		process_filenames(&de);
+		if (strcmp(de.Name, filename) == 0)
+        {
+            uint32_t FirstClusterNum = buildClusterAddress(&de);
+            int i;
+            int foundFile = 0;
+            for(i = 0; i < *arrLen; i++)
+            {
+                if(array[i].file_first_cluster_number == FirstClusterNum)
+                {
+                    foundFile = 1;
+                }
+                
+                if (foundFile == 1 && i != *arrLen-1)
+                {
+                    array[i] = array[i+1];
+                }
+            }
+            
+            if (foundFile)
+            {
+                fclose(ptr_img);
+                *arrLen -= 1;
+                printf("Successfully removed file with name:%s and first cluster number: %d\n", filename, FirstClusterNum);
+                return -1;
+            }
+            
+            else
+            {
+                fclose(ptr_img);
+                printf("File with name:%s and first cluster number: %d is not open\n", filename, FirstClusterNum);
+                return 1;
+            }
+        }
+    }
+    
+    fclose(ptr_img);
+    printf("Unable to locate file with name: %s in current directory\n");
+    return 2;
 }
 
 int main(int argc,char* argv[])
@@ -1046,6 +1105,9 @@ int main(int argc,char* argv[])
 
 		} else if ((strcmp(command, "close") == 0)) {
 			printf("CLOSE\n");
+            char * filename;
+            filename = strtok(args, " ");
+            close_filename(&bpb, fat_image, current_cluster, filename, openFilesArray, arr_length);
 			/*Part 11: close FILENAME*/
 
 		} else if ((strcmp(command, "read") == 0)) {
