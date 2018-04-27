@@ -1261,7 +1261,7 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 •However, there are a bunch of edge cases that can happen:
 */
 	// get the start of the actual content of the directory
-
+	DirectoryEntry de;
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
 	
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
@@ -1316,7 +1316,7 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 */
 	
 	// get the start of the actual content of the directory
-
+	DirectoryEntry de;
 	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, pwd_cluster_num);
 
 	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
