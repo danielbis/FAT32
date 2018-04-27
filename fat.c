@@ -1095,6 +1095,106 @@ int read_file(char* fat_image, FAT32BootBlock* bs /*, DirectoryEntry* target_fil
 	return 0;
 }
 
+/* Returns cluster number for the filename in the current cluster*/
+int cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename,)
+{// (FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
+/*write FILENAME OFFSET SIZE STRING*/
+/*
+Just do the same as read till you start reading (go to the nth cluster, 
+then the OFFSET%sector_size bytes since the start of the nth cluster)
+
+Now, ideally, you should fwrite the STRING into the FILE•Initialize a char array of SIZE bytes 
+•Make sure to check that FILENAME is OPEN in WR_ONLY or RD_WR mode
+•However, there are a bunch of edge cases that can happen:
+*/
+	DirectoryEntry de;
+	// get the start of the actual content of the directory
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
+	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
+	uint32_t counter;
+	FILE *ptr_img;
+    
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.\n");
+		return 0;
+	}
+	
+	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++)
+	{
+		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+		process_filenames(&de);
+		printf("%s\n", de.Name);
+		if (strcmp(de.Name, filename) == 0)
+        {
+        	printf("Write to this file: %s\n", de.Name);
+        	return current_cluster;
+
+        }
+    }
+    fclose(ptr_img);
+
+	uint32_t fat_entry = look_up_fat(bpb, fat_image, cluster_to_byte_address(bpb,current_cluster));
+
+	if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
+	{ 
+		printf("END OF THE DIRECTORY. and file not found\n");
+		return -1;
+	}else
+	{ // it is not the end of dir, call ls again with cluster_number returned from fat table
+		current_cluster = fat_entry;
+		return cluster_number(bpb, fat_image, filename); 
+	}
+
+	return 0;
+}
+
+
+int write_file(FAT32BootBlock* bpb, char* fat_image, char * filename, uint32_t offset, uint32_t size,char * string)
+{// (FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
+/*write FILENAME OFFSET SIZE STRING*/
+/*
+Just do the same as read till you start reading (go to the nth cluster, 
+then the OFFSET%sector_size bytes since the start of the nth cluster)
+
+Now, ideally, you should fwrite the STRING into the FILE•Initialize a char array of SIZE bytes 
+•Make sure to check that FILENAME is OPEN in WR_ONLY or RD_WR mode
+•However, there are a bunch of edge cases that can happen:
+*/
+	DirectoryEntry de;
+	// get the start of the actual content of the directory
+	uint32_t FirstSectorofCluster = first_sector_of_cluster(bpb, current_cluster);
+	uint32_t cluster_count = getFileSizeInClusters(fat_image, bpb, FirstSectorofCluster);
+	uint32_t counter;
+	FILE *ptr_img;
+    
+	ptr_img = fopen(fat_image, "r");
+	if (!ptr_img)
+	{
+		printf("Unable to open the file image.\n");
+		return 0;
+	}
+	
+	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+	for(counter = 0; counter*sizeof(DirectoryEntry) < bpb->sector_size; counter ++)
+	{
+		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
+		process_filenames(&de);
+		printf("%s\n", de.Name);
+		if (strcmp(de.Name, filename) == 0)
+        {
+        	printf("Write to this file: %s\n", de.Name);
+
+        }
+    }
+    fclose(ptr_img);
+
+
+	return 0;
+}
+
 int main(int argc,char* argv[])
 {
     char fat_image[256];
@@ -1221,6 +1321,14 @@ int main(int argc,char* argv[])
 		} else if ((strcmp(command, "write") == 0)) {
 			printf("WRITE\n");
 			/*Part 13: write FILENAMEOFFSETSIZESTRING*/
+			char * filename = "A";
+			uint32_t offset = 12;
+			uint32_t size = 16;
+			char * string = "aaa";
+			//write_file(&bpb, fat_image, filename, offset, size,string);
+			int cluster =  cluster_number(&bpb, fat_image, filename);
+			printf("cluster num to write: %d\n", cluster);
+
 		} else {
 			printf("UNKNOWN COMMAND\n");
 
