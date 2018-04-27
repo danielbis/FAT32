@@ -1571,7 +1571,7 @@ int main(int argc,char* argv[])
 			printf("EXIT\n");
 			/*Part 1: exit*/
 
-		} else if ((strcmp(command, "info\n") == 0)) {
+		} else if ((strcmp(command, "info") == 0)) {
 			info(&bpb);
 			/*Part 2: info*/
 
