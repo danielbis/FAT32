@@ -1000,14 +1000,13 @@ int close_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluste
 	reading, or if OFFSET is larger than the size of the file.
 
 */
-int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int open_files_count, char* filename, uint32_t offset, uint32_t size)
+int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int open_files_count, char* filename, int offset, int size)
 {
 	/*
 		MATCH FOR THE OPEN FILENAME
 	*/
 	// Check if file in directory
 	uint32_t first_cluster = cluster_number(bs, fat_image, filename, current_cluster);
-	printf("freshCluster: %d\n", first_cluster);
 	int i;
 	int found = 0;
 	for (i= 0; i < open_files_count; ++i)
@@ -1037,20 +1036,20 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 	}
 	
 
-    
 	uint32_t cluster_number = first_cluster; //buildClusterAddress(target_file);
 	uint32_t cluster_offset = offset / bs -> sector_size;
+
 	uint32_t bytes_offset = offset % bs -> sector_size;
 	uint32_t cluster_size = bs -> sector_size * bs -> sectors_per_cluster;
-	uint32_t clusters_to_read = (cluster_size / size) + (cluster_size % size);
+	
+
+	uint32_t clusters_to_read = (uint32_t)(cluster_size / size) + (cluster_size % size);
+
 	uint32_t bytes_to_read = size;
-	printf("before malloc: %d\n", cluster_size); 
 
 	char* data = malloc(size);
-		printf("after malloc: %d\n", cluster_size); 
 
 	data[size] = '\0';
-	printf("size of cluster is: %d\n", cluster_size); 
 	while (cluster_offset != 0)
 	{
 		cluster_number = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, cluster_number)); 
@@ -1137,7 +1136,6 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 	{
 		fread(&de, sizeof(DirectoryEntry),1,ptr_img);
 		process_filenames(&de);
-		printf("%s\n", de.Name);
 		if (strcmp(de.Name, filename) == 0)
         {
         	return buildClusterAddress(&de);
@@ -1328,7 +1326,7 @@ int main(int argc,char* argv[])
 			
 			args = command + strlen(command) +1;
 			char * filename = strtok(args, " ");
-			char * offset_c = strtok(NULL, args);
+			char * offset_c = strtok(NULL, " ");
 			int offset = atoi(offset_c);
 			char * size_c = offset_c + strlen(offset_c) +1;
 			int read_size = atoi(size_c); 
