@@ -760,8 +760,10 @@ int create(char* fat_image, FAT32BootBlock* bs, const char* filename, const char
 {
 	
 	DirectoryEntry newDirEntry;
+	uint32_t beginNewDirClusterChain = FAT_findFirstFreeCluster(fat_image, bs); // free cluster
+	FAT_writeFatEntry(fat_image, bs, beginNewDirClusterChain, FAT_EOC); //mark that its End of Cluster
 
-    createEntry(&newDirEntry, filename, extension, FALSE, targetDirectoryCluster, 0);
+    createEntry(&newDirEntry, filename, extension, FALSE, beginNewDirClusterChain, 0);
 
     writeFileEntry(fat_image, bs, &newDirEntry, targetDirectoryCluster, FALSE);
 
