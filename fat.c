@@ -1241,7 +1241,6 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 	}
 	fclose(ptr_img);
 	free(data);
-	printf("\n");
 
 
 	return 0;
