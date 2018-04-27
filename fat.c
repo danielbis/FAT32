@@ -1426,6 +1426,15 @@ int main(int argc,char* argv[])
 		// we will process args accordingly depending from the command.
 		args = command + strlen(command) +1;
 		args = strtok(args, "\n"); // get rid of \n from fgets
+        
+        int i;
+        for (i = 0; i < strlen(command); i++)
+        {
+            if(command[i] == '\n')
+            {
+                command[i] = 0;
+            }
+        }
 
 		if (strcmp(command, "exit") == 0) {
 			printf("EXIT\n");
