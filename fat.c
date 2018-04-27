@@ -892,7 +892,50 @@ int rm(char* fat_image, FAT32BootBlock* bs, char* filename)
         }
         nth_dir++;
     }
+    printf("size to be deleted %d\n", copy_de.FileSize);
+    /*
+	Clean the data, add the clusters where data continue to the stack
 
+    */
+    int begin_of_fat = buildClusterAddress(&copy_de);
+
+    FirstSectorofCluster = first_sector_of_cluster(bs, begin_of_fat);
+    uint32_t fat_entry = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, begin_of_fat));
+
+
+    //uint32_t first_sector_parent = first_sector_of_cluster(bs, current_cluster);
+    uint32_t cluss_to_be_deleted_ratio = copy_de.FileSize/32;
+    while(copy_de.FileSize > 0 )
+    {
+    	fseek(ptr_img, FirstSectorofCluster, SEEK_SET);
+	    if(cluss_to_be_deleted_ratio>1)
+	    {
+	    	// delete the whole cluster
+	    	for (i = 0; i < copy_de.FileSize; ++i)
+			{
+				fwrite(&zero, 1, 1, ptr_img);
+
+			}
+			copy_de.FileSize = 0;
+	    }else
+	    {
+	    	//delete only small part and done
+	    	for (i = 0; i < 32; ++i)
+			{
+				fwrite(&zero, 1, 1, ptr_img);
+
+			}
+			copy_de.FileSize = copy_de.FileSize - 32;
+	    }
+	    cluss_to_be_deleted_ratio = copy_de.FileSize/32;
+
+	    FAT_writeFatEntry(fat_image, bs, FirstSectorofCluster, 0x00);
+		if (fat_entry == 0x0FFFFFF8 || fat_entry == 0x0FFFFFFF)
+			break; // end of cluster chain	    
+	    FirstSectorofCluster = first_sector_of_cluster(bs, begin_of_fat);
+	    fat_entry = look_up_fat(bs, fat_image, cluster_to_byte_address(bs, FirstSectorofCluster));
+
+	}
 
     fclose(ptr_img);
 
