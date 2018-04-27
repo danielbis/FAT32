@@ -1096,7 +1096,7 @@ int read_file(char* fat_image, FAT32BootBlock* bs /*, DirectoryEntry* target_fil
 }
 
 /* Returns cluster number for the filename in the current cluster*/
-int cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename,)
+int cluster_number(FAT32BootBlock* bpb, char* fat_image, char * filename)
 {// (FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster, char * filename, openFile * array, int *arrLen)
 /*write FILENAME OFFSET SIZE STRING*/
 /*
@@ -1256,7 +1256,8 @@ int main(int argc,char* argv[])
 			//printf("DirName: %s\n", cmd);
 			/*Part 3: ls DIRNAME*/
 
-		} else if ((strcmp(command, "cd") == 0)) {
+		} else if ((strcmp(command, "cd") == 0)) 
+		{
 			current_cluster = ls(&bpb, fat_image, current_cluster, 1, 0, args);
 
 			/*Part 4: cd DIRNAME*/
