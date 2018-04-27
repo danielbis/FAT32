@@ -8,15 +8,27 @@ The folder contains the the file fat.c, which is the implementation of the proje
 The following functions were implemented. Below we list the performed test cases for each functions:
 
 Part 1: exit 
-
+exit
 Part 2: info
+info
 Part 3: ls DIRNAME
+ls .
+ls ..
+ls RED
 Part 4: cd DIRNAME
+cd RED
+cd BLUE
 Part 5: size FILENAME
+size A
+size B
 Part 6: creat FILENAME
+creat A
 Part 7: mkdir DIRNAME
+mkdir PROJ3
 Part 8: rm FILENAME
+rm A
 Part 9: rmdir DIRNAME
+rmdir PROJ3
 Part 10: open FILENAMEMODE
 Part 11: close FILENAME
 Part 12: read FILENAME OFFSETSIZE 

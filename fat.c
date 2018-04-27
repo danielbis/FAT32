@@ -1,3 +1,9 @@
+/*Created by:
+Daniel Bis dmb16f@my.fsu.edu
+Grzegorz Kakareko gk15@my.fsu.edu 
+Mark Thomas mtw14@my.fsu.edu
+*/
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
