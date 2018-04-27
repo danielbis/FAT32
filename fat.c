@@ -1577,7 +1577,8 @@ int main(int argc,char* argv[])
 			char * filename = strtok(args, " ");
 			char* offset_c = strtok(NULL, " ");
 			char* size_c = strtok(NULL, " ");
-			char * string = size_c + strlen(size_c) + 1;
+			char * string = size_c + strlen(size_c) + 2;
+			string = strtok(string, "\"");
 			strcat(string, "\n");
 			int offset = atoi(offset_c);
 			int size = atoi(size_c);

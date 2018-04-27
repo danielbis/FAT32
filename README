@@ -4,7 +4,8 @@ Mark Thomas mtw14@my.fsu.edu
 
 Project 3: Specification FAT32 File System
 
-The folder contains the the file fat.c, which is the implementation of the project 3. The folder includes the makefile and the executable can be build by the make command:
+The folder contains the the file fat.c, which is the implementation of the project 3. The folder includes the makefile and the executable can be build by the make command.
+
 The following functions were implemented. Below we list the performed test cases for each functions:
 
 Part 1: exit 
