@@ -859,7 +859,7 @@ int rm(char* fat_image, FAT32BootBlock* bs, char* filename)
 	uint32_t counter;
 	FILE *ptr_img;
     
-	ptr_img = fopen(fat_image, "r");
+	ptr_img = fopen(fat_image, "rb+");
 	if (!ptr_img)
 	{
 		printf("Unable to open the file image.\n");
@@ -879,7 +879,8 @@ int rm(char* fat_image, FAT32BootBlock* bs, char* filename)
         	printf("Write to this file: %s\n", de.Name);
         	copy_de = de;
         	
-			fseek(ptr_img, -sizeof(DirectoryEntry), SEEK_CUR);
+			//fseek(ptr_img, -sizeof(DirectoryEntry), SEEK_CUR);
+			fseek(ptr_img, -32, SEEK_CUR);
 			for (i = 0; i < 32; ++i)
 			{
 				fwrite(&zero, 1, 1, ptr_img);
@@ -891,6 +892,8 @@ int rm(char* fat_image, FAT32BootBlock* bs, char* filename)
         }
         nth_dir++;
     }
+
+
     fclose(ptr_img);
 
 	 return 0;
