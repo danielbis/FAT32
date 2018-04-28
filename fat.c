@@ -19,14 +19,11 @@ Mark Thomas mtw14@my.fsu.edu
 typedef int bool;
 
 #define ENTRIES_PER_SECTOR 16
-#define MAX_FILENAME_SIZE 8
-#define MAX_EXTENTION_SIZE 3
 
 //open file codes
 #define MODE_READ 0
 #define MODE_WRITE 1
 #define MODE_BOTH 2
-#define MODE_UNKNOWN 3 //when first created and directories
 
 const uint8_t ATTR_READ_ONLY = 0x01;
 const uint8_t ATTR_HIDDEN = 0x02;
@@ -1064,6 +1061,11 @@ int read_file(char* fat_image, FAT32BootBlock* bs, openFile* open_files, int ope
 	{
 		if (open_files[i].file_first_cluster_number == first_cluster){
 			found = 1;
+            if (open_files[i].mode == MODE_WRITE)
+            {
+                printf("File is opened in Write Mode.\n");
+                return -1;
+            }
 			break;
 		}
 	}
@@ -1298,6 +1300,11 @@ Now, ideally, you should fwrite the STRING into the FILE•Initialize a char arr
 	{
 		if (open_files[i].file_first_cluster_number == first_cluster){
 			found = 1;
+            if (open_files[i].mode == MODE_READ)
+            {
+                printf("File is opened in Read Mode.\n");
+                return -1;
+            }
 			break;
 		}
 	}
