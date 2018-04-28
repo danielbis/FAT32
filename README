@@ -6,6 +6,11 @@ Project 3: Specification FAT32 File System
 
 The folder contains the the file fat.c, which is the implementation of the project 3. The folder includes the makefile and the executable can be built using the make command. The executable will be named "fat".
 
+Command to build: make (with makefile and fat.c in the current directory)
+To run: fat fat32.img (fat32.img needs to be in the current directory)
+
+Bugs/Problems: None that we are aware of.
+
 The following functions were implemented. Below is a list of the performed test cases for each functions:
 
 Part 1: exit 
