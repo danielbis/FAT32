@@ -943,7 +943,7 @@ int open_filename(FAT32BootBlock* bpb, char* fat_image, uint32_t current_cluster
             else
             {
                 fclose(ptr_img);
-                printf("File: \"%s\" is a directory\n");
+                printf("File: \"%s\" is a directory\n", filename);
                 return 1;
             }
 		}
